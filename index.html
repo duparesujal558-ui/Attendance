@@ -176,6 +176,7 @@
 
 <script>
 /* ================= storage ================= */
+var APP_VERSION = '1.6';
 var KEY = 'sgAttendanceData';
 var savedTo = [];
 
@@ -501,10 +502,12 @@ function renderStatus(){
   if(u.length){
     el.className='ok';
     el.innerHTML='<span>&#10003;</span><span>Saving to <b>'+u.join('</b> and <b>')+
-      '</b>. Data stays after you close the browser.</span>';
+      '</b>. Data stays after you close the browser. '+
+      '<span style="opacity:.6">v'+APP_VERSION+'</span></span>';
   }else{
     el.className='warn';
-    el.innerHTML='<span>!</span><span>Not saving. Use <b>Save backup file</b> in Students before closing.</span>';
+    el.innerHTML='<span>!</span><span>Not saving. Use <b>Save backup file</b> in Students before closing. '+
+      '<span style="opacity:.6">v'+APP_VERSION+'</span></span>';
   }
 }
 function renderHeader(){
