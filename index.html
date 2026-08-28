@@ -1,0 +1,2786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1E2A44">
+<title>Attendance Register</title>
+
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Attendance">
+
+<style>
+  :root{
+    --ink:#1E2A44; --present:#1F7A5C; --present-bg:#E8F3EE;
+    --absent:#B23A3A; --absent-bg:#FBEAEA;
+    --left:#B45309; --left-bg:#FEF3C7;
+    --wa:#25806B; --line:#E2E8F0; --muted:#94A3B8;
+    --body:#334155; --bg:#F8FAFC; --paper:#FBFAF7;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;padding:0 0 76px;background:var(--bg);color:var(--body);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    font-size:15px;line-height:1.5}
+  .display{font-family:Georgia,"Times New Roman",serif}
+  .wrap{max-width:640px;margin:0 auto;padding:0 16px}
+
+  header{background:var(--ink);color:#fff;padding:14px 0;position:sticky;top:0;z-index:10}
+  header h1{margin:0;font-size:17px;font-weight:600;letter-spacing:-.01em}
+  header p{margin:2px 0 0;font-size:12px;color:#CBD5E1}
+
+  #status{font-size:12px;padding:8px 12px;border-radius:8px;margin:12px 0;display:flex;gap:8px;align-items:flex-start}
+  #status.ok{background:var(--present-bg);color:var(--present)}
+  #status.warn{background:var(--left-bg);color:var(--left)}
+  #status b{font-weight:600}
+
+  main{padding:12px 0}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  .card + .card{margin-top:14px}
+  .card-pad{padding:12px}
+  .row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-top:1px solid #F1F5F9;gap:10px}
+  .row:first-child{border-top:none}
+  .who{min-width:0;flex:1}
+  .name{font-size:14px;font-weight:500;color:#1E293B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .roll{font-size:12px;color:var(--muted);margin-top:1px}
+
+  input,textarea,select{font:inherit;font-size:14px;border:1px solid var(--line);
+    border-radius:9px;padding:8px 10px;background:#fff;color:var(--body);width:100%}
+  select{appearance:none;-webkit-appearance:none;
+    background-image:url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 8px center;background-size:16px;padding-right:28px}
+  input:focus-visible,button:focus-visible,textarea:focus-visible,select:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+  button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  .btn{background:var(--ink);color:#fff;font-size:14px;font-weight:500;padding:11px 14px;border-radius:11px;width:100%;text-align:center}
+  .btn.ghost{background:#fff;color:var(--body);border:1px solid var(--line)}
+  .btn.wa{background:var(--wa);color:#fff}
+  .btn.warn{background:var(--left);color:#fff}
+  .btn.sm{font-size:12px;padding:7px 11px;width:auto;border-radius:9px}
+  .btn:disabled{opacity:.5}
+  .btn-row{display:flex;gap:8px}
+  .btn-row .btn{flex:1}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+
+  .pills{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px}
+  .pill{border-radius:10px;padding:9px 4px;text-align:center}
+  .pill .n{font-size:17px;font-weight:600;line-height:1}
+  .pill .l{font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-top:4px;opacity:.75}
+  .pill.p{background:var(--present-bg);color:var(--present)}
+  .pill.a{background:var(--absent-bg);color:var(--absent)}
+  .pill.t{background:#F1F5F9;color:#475569}
+  .pill.w{background:var(--left-bg);color:var(--left)}
+
+  .mk{width:38px;height:38px;border-radius:10px;font-size:14px;font-weight:600;background:#F1F5F9;color:var(--muted)}
+  .mk.on-p{background:var(--present);color:#fff}
+  .mk.on-a{background:var(--absent);color:#fff}
+  .marks{display:flex;gap:6px;flex-shrink:0}
+
+  .toolbar{display:flex;gap:8px;margin-bottom:12px;align-items:center}
+  .toolbar input{flex:1}
+  .label{font-size:12px;font-weight:500;color:#64748B;margin:0 0 8px}
+  .hint{font-size:12px;color:var(--muted);margin:8px 0 0;line-height:1.45}
+  .empty{text-align:center;padding:40px 16px;color:var(--muted);font-size:14px}
+  .linkish{font-size:12px;color:#64748B;text-decoration:underline;padding:0}
+  .sect{font-size:12px;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.05em;margin:20px 0 9px}
+  .tag{font-size:11px;padding:2px 7px;border-radius:20px;font-weight:500;white-space:nowrap}
+  .tag.sent{background:var(--present-bg);color:var(--present)}
+  .tag.nophone{background:var(--left-bg);color:var(--left)}
+  .tag.b{background:#EEF2F7;color:#475569}
+
+  .sheet{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px 18px 18px 40px;position:relative}
+  .sheet::before{content:"";position:absolute;top:0;bottom:0;left:26px;width:1px;background:#E3B3AC}
+  .sheet-head{text-align:center;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:14px}
+  .sheet-head h2{margin:0;font-size:18px;color:#0F172A;font-weight:600}
+  .sheet-head .cls{font-size:13px;color:#64748B;margin:2px 0 0}
+  .sheet-head .kicker{font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:9px 0 0}
+  .sheet-head .date{font-size:14px;font-weight:500;color:#334155;margin:3px 0 0}
+  .meta{font-size:12px;color:#64748B;margin:8px 0 0;line-height:1.6}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:500;padding-bottom:7px}
+  td{padding:6px 0;border-top:1px solid var(--line)}
+  td.r,th.r{width:56px;font-size:12px;color:#64748B;font-variant-numeric:tabular-nums}
+  td.right,th.right{text-align:right}
+  td.s{font-size:12px;font-weight:500;white-space:nowrap}
+  .foot{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);margin-top:14px;padding-top:14px}
+  .stamp{width:62px;height:62px;border-radius:50%;border:2px solid var(--present);color:var(--present);
+    display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;transform:rotate(-8deg);flex-shrink:0}
+  .sign{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:30px}
+
+  .mrow td{font-variant-numeric:tabular-nums}
+  .low{color:var(--absent);font-weight:600}
+  .ok-pct{color:var(--present);font-weight:600}
+  .bar{height:5px;border-radius:3px;background:#F1F5F9;overflow:hidden;margin-top:4px}
+  .bar > i{display:block;height:100%;background:var(--present)}
+  .bar > i.low{background:var(--absent)}
+
+  nav{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);z-index:20;padding-bottom:env(safe-area-inset-bottom)}
+  nav .wrap{display:flex;padding:0}
+  nav button{flex:1;padding:9px 0 8px;font-size:11px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:3px}
+  nav button.on{color:#0F172A;font-weight:600}
+  nav svg{width:21px;height:21px;stroke-width:1.8}
+
+  @media print{
+    header,nav,#status,.noprint{display:none!important}
+    body{padding:0;background:#fff}
+    .sheet{border:none;border-radius:0;padding-left:18px}
+    .sheet::before{display:none}
+    .card{border:none}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap" style="display:flex;align-items:center;gap:10px">
+    <div style="flex:1;min-width:0">
+      <h1 class="display">Attendance Register</h1>
+      <p id="subtitle">Set up your class in the Students tab</p>
+    </div>
+    <button id="installBtn" class="btn sm" style="display:none;background:#fff;color:#1E2A44;flex:0 0 auto">Install</button>
+  </div>
+</header>
+
+<div class="wrap"><div id="status"></div></div>
+<main class="wrap" id="main"></main>
+
+<nav>
+  <div class="wrap">
+    <button data-tab="mark" class="on">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg>
+      Mark
+    </button>
+    <button data-tab="sheet">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>
+      Sheet
+    </button>
+    <button data-tab="daily">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 11 2 2 4-4"/></svg>
+      Day
+    </button>
+    <button data-tab="month">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 14h.01M12 14h.01M16 14h.01"/></svg>
+      Month
+    </button>
+    <button data-tab="students">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Students
+    </button>
+  </div>
+</nav>
+
+<script>
+/* ================= storage ================= */
+var KEY = 'sgAttendanceData';
+var savedTo = [];
+
+function localWorks(){
+  try{ window.localStorage.setItem('__p__','1'); window.localStorage.removeItem('__p__'); return true; }
+  catch(e){ return false; }
+}
+function cloudGet(k){
+  return new Promise(function(res){
+    if(!window.storage) return res(null);
+    try{ window.storage.get(k,false).then(function(r){
+      res(r && typeof r.value==='string' ? r.value : null);
+    }).catch(function(){ res(null); }); }catch(e){ res(null); }
+  });
+}
+function cloudSet(k,v){
+  return new Promise(function(res){
+    if(!window.storage) return res(false);
+    try{ window.storage.set(k,v,false).then(function(r){ res(!!r); }).catch(function(){ res(false); }); }
+    catch(e){ res(false); }
+  });
+}
+function saveData(){
+  var json = JSON.stringify(data);
+  savedTo = [];
+  if(localWorks()){ try{ window.localStorage.setItem(KEY,json); savedTo.push('this device'); }catch(e){} }
+  return cloudSet(KEY,json).then(function(ok){
+    if(ok) savedTo.push('your Claude account');
+    renderStatus();
+    return savedTo.length>0;
+  });
+}
+
+/* ================= state ================= */
+var DEFAULT_TEMPLATE =
+  'Dear Parent, this is to inform you that {name} (Roll No. {roll}) was marked ABSENT in ' +
+  '{session} on {date}. Kindly ensure regular attendance.\n\n- {college}';
+
+var DEFAULT_LEFT_TEMPLATE =
+  'Dear Parent, {name} (Roll No. {roll}) was present in the morning on {date} but was found ' +
+  'ABSENT in the evening session. It appears the student left the campus during college hours. ' +
+  'Kindly look into this.\n\n- {college}';
+
+var SLOTS = ['Morning','Afternoon','Evening'];
+
+var data = {
+  version: 4,
+  classInfo: { collegeName:'', className:'' },
+  divisions: ['A','B'],
+  classes: [],
+  users: [],
+  subjects: [],
+  teachers: [],
+  students: [],
+  sessions: {},
+  settings: {
+    template: DEFAULT_TEMPLATE,
+    leftTemplate: DEFAULT_LEFT_TEMPLATE,
+    threshold: 75,
+    teacherName: '',
+    role:'teacher', pin:'', crClass:'',
+    fbUrl:'', classCode:'', autoSync:true
+  }
+};
+
+var ui = {
+  tab:'mark',
+  date: todayISO(),
+  month: todayISO().slice(0,7),
+  userId:null, loginPick:null, loginMsg:'',
+  className:'', division:'A', batch:'All', slot:'Morning', subject:'', teacher:'',
+  marks:{},
+  viewKey:null,
+  dayDate: todayISO(),
+  query:'', sQuery:'',
+  monthView:'session',
+  editingId:null, confirmId:null,
+  showBulk:false, showTpl:false, showLeftTpl:false, showPaste:false,
+  addingSubject:false, addingTeacher:false, addingClass:false,
+  unlocking:false, pinMsg:'', confirmClass:null,
+  newSubjText:'', newTeachText:'',
+  confirmSubj:null, confirmTeach:null
+};
+
+/* ================= helpers ================= */
+function todayISO(){
+  var d=new Date();
+  return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
+}
+function longDate(iso){
+  if(!iso) return '';
+  var p=iso.split('-');
+  return new Date(+p[0],+p[1]-1,+p[2]).toLocaleDateString('en-IN',
+    {weekday:'long',year:'numeric',month:'long',day:'numeric'});
+}
+function shortDate(iso){
+  var p=iso.split('-');
+  return new Date(+p[0],+p[1]-1,+p[2]).toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+}
+function monthName(ym){
+  var p=ym.split('-');
+  return new Date(+p[0],+p[1]-1,1).toLocaleDateString('en-IN',{month:'long',year:'numeric'});
+}
+function genId(){ return 's_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function byRoll(list){
+  return list.slice().sort(function(a,b){
+    return String(a.rollNo||'').localeCompare(String(b.rollNo||''),undefined,{numeric:true,sensitivity:'base'});
+  });
+}
+function csvCell(v){
+  var s=String(v==null?'':v);
+  return /[",\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function findStudent(id){
+  for(var i=0;i<data.students.length;i++) if(data.students[i].id===id) return data.students[i];
+  return null;
+}
+/* Roll numbers repeat across divisions, so a match must consider both. */
+function findByRoll(roll, division, className){
+  var r=String(roll||'').trim().toLowerCase();
+  if(!r) return null;
+  var d=String(division==null?'':division).trim();
+  var c=className===undefined ? ui.className : className;
+  for(var i=0;i<data.students.length;i++){
+    var s=data.students[i];
+    if(String(s.rollNo||'').trim().toLowerCase()!==r) continue;
+    if(String(s.className||'')!==String(c||'')) continue;
+    if(d && String(s.division||'')!==d) continue;
+    return s;
+  }
+  return null;
+}
+function normPhone(p){
+  var d=String(p||'').replace(/\D/g,'');
+  if(!d) return '';
+  if(d.length===10) return '91'+d;
+  if(d.length===11 && d.charAt(0)==='0') return '91'+d.slice(1);
+  return d;
+}
+function matches(s,q){
+  if(!q) return true;
+  q=q.toLowerCase();
+  return s.name.toLowerCase().indexOf(q)>-1 || String(s.rollNo||'').toLowerCase().indexOf(q)>-1;
+}
+
+/**
+ * Builds <option> markup. A value still attached to an old session is kept
+ * in the list even after it is removed, so history never shows blanks.
+ */
+function optionList(items, current, blankLabel){
+  var list=(items||[]).slice();
+  if(current && list.indexOf(current)===-1) list.push(current);
+  list.sort(function(a,b){ return String(a).localeCompare(String(b)); });
+  var out = blankLabel
+    ? '<option value=""'+(!current?' selected':'')+'>'+esc(blankLabel)+'</option>' : '';
+  list.forEach(function(it){
+    out+='<option value="'+esc(it)+'"'+(it===current?' selected':'')+'>'+esc(it)+'</option>';
+  });
+  return out;
+}
+
+function currentUser(){
+  if(!data.users || !data.users.length) return null;
+  var found=null;
+  data.users.forEach(function(u){ if(u.id===ui.userId) found=u; });
+  return found;
+}
+/* No users configured means logins were never set up, so the app behaves
+   exactly as it did before. Adding the first user turns login on. */
+function loginsOn(){ return (data.users||[]).length>0; }
+function needsLogin(){ return loginsOn() && !currentUser(); }
+
+function isOwner(){
+  var u=currentUser();
+  return u ? u.role==='owner' : true;
+}
+/* Classes this person is allowed to touch. Owners see everything. */
+function myClasses(){
+  var u=currentUser();
+  var all=allClasses();
+  if(!u || u.role==='owner') return all;
+  var mine=u.classes||[];
+  return all.filter(function(c){ return mine.indexOf(c)>-1; });
+}
+
+/* CR mode: can mark attendance and produce the sheet, nothing else.
+   Deliberately also hides parent phone numbers - a student should not
+   have the contact details of sixty families. */
+function isCR(){
+  var u=currentUser();
+  if(u) return u.role==='cr';
+  return data.settings.role === 'cr';
+}
+/* Which single class a CR is pinned to. */
+function crClassOf(){
+  var u=currentUser();
+  if(u && u.role==='cr') return (u.classes||[])[0]||'';
+  return data.settings.crClass||'';
+}
+
+/* ---- sessions ---- */
+/* Class sits above division: TY AIML Div A and SY AIML Div A are different
+   groups, and roll number 1 in each is a different student. */
+function safeName(v){ return String(v==null?'':v).replace(/\|/g,'-'); }
+
+function sessionKey(className,date,division,batch,slot){
+  return safeName(className)+'|'+date+'|'+division+'|'+batch+'|'+slot;
+}
+function currentKey(){
+  return sessionKey(ui.className, ui.date, ui.division, ui.batch, ui.slot);
+}
+function sessionLabel(s){
+  var bits = [];
+  if(s.className) bits.push(s.className);
+  bits.push('Div '+s.division);
+  bits.push(s.batch==='All' ? 'Full class' : 'Batch '+s.batch);
+  bits.push(s.slot);
+  if(s.subject) bits.push(s.subject);
+  return bits.join(' \u00B7 ');
+}
+/* Students belonging to the division/batch currently selected. */
+function classStudents(cls){
+  cls = cls===undefined ? ui.className : cls;
+  return data.students.filter(function(s){ return String(s.className||'')===String(cls||''); });
+}
+function scopeStudents(){
+  return classStudents().filter(function(s){
+    if(String(s.division||'') !== ui.division) return false;
+    if(ui.batch !== 'All' && String(s.batch||'') !== ui.batch) return false;
+    return true;
+  });
+}
+function statusOf(id){ return ui.marks[id] || 'present'; }
+function counts(){
+  var list = scopeStudents(), p=0;
+  list.forEach(function(s){ if(statusOf(s.id)==='present') p++; });
+  return { present:p, absent:list.length-p, total:list.length };
+}
+/* Divisions that exist inside the active class. */
+function allDivisions(){
+  var seen={};
+  classStudents().forEach(function(s){ if(s.division) seen[s.division]=true; });
+  Object.keys(data.sessions||{}).forEach(function(k){
+    var ss=data.sessions[k];
+    if(String(ss.className||'')===String(ui.className||'') && ss.division) seen[ss.division]=true;
+  });
+  if(!Object.keys(seen).length) (data.divisions||['A']).forEach(function(d){ seen[d]=true; });
+  var out=Object.keys(seen).sort();
+  return out.length?out:['A'];
+}
+
+function allClasses(){
+  var seen={};
+  (data.classes||[]).forEach(function(c){ if(c) seen[c]=true; });
+  data.students.forEach(function(s){ if(s.className) seen[s.className]=true; });
+  Object.keys(data.sessions||{}).forEach(function(k){
+    var c=data.sessions[k].className; if(c) seen[c]=true;
+  });
+  return Object.keys(seen).sort();
+}
+
+/**
+ * Students present in a morning session but absent in an evening one,
+ * on the same date and division. This is the mid-day departure check.
+ */
+function leftEarly(date, division, className){
+  var c = className===undefined ? ui.className : className;
+  var morning={}, evening={};
+  Object.keys(data.sessions).forEach(function(k){
+    var s=data.sessions[k];
+    if(s.date!==date || s.division!==division) return;
+    if(String(s.className||'')!==String(c||'')) return;
+    var bucket = s.slot==='Morning' ? morning : (s.slot==='Evening' ? evening : null);
+    if(!bucket) return;
+    s.entries.forEach(function(e){
+      // Present in ANY session of that half counts as present.
+      if(!(e.id in bucket) || e.status==='present') bucket[e.id]=e.status;
+    });
+  });
+  var out=[];
+  Object.keys(morning).forEach(function(id){
+    if(morning[id]==='present' && evening[id]==='absent'){
+      var st=findStudent(id);
+      if(st) out.push(st);
+    }
+  });
+  return byRoll(out);
+}
+function hasMorningAndEvening(date, division, className){
+  var c = className===undefined ? ui.className : className;
+  var m=false,e=false;
+  Object.keys(data.sessions).forEach(function(k){
+    var s=data.sessions[k];
+    if(s.date!==date || s.division!==division) return;
+    if(String(s.className||'')!==String(c||'')) return;
+    if(s.slot==='Morning') m=true;
+    if(s.slot==='Evening') e=true;
+  });
+  return m && e;
+}
+
+function buildMsg(tpl, entry, s){
+  return String(tpl)
+    .replace(/\{name\}/g, entry.name)
+    .replace(/\{roll\}/g, entry.rollNo||'-')
+    .replace(/\{date\}/g, longDate(s.date))
+    .replace(/\{session\}/g, sessionLabel(s))
+    .replace(/\{subject\}/g, s.subject||'class')
+    .replace(/\{teacher\}/g, s.teacher||'')
+    .replace(/\{class\}/g, (s.className||'')+' Div '+s.division)
+    .replace(/\{college\}/g, s.collegeName||'');
+}
+
+/* ================= status ================= */
+function renderStatus(){
+  var el=document.getElementById('status');
+  var u=savedTo.filter(function(v,i,a){ return a.indexOf(v)===i; });
+  if(u.length){
+    el.className='ok';
+    el.innerHTML='<span>&#10003;</span><span>Saving to <b>'+u.join('</b> and <b>')+
+      '</b>. Data stays after you close the browser.</span>';
+  }else{
+    el.className='warn';
+    el.innerHTML='<span>!</span><span>Not saving. Use <b>Save backup file</b> in Students before closing.</span>';
+  }
+}
+function renderHeader(){
+  var u=currentUser();
+  var bits=[u?u.name:'', ui.className, data.classInfo.collegeName].filter(Boolean);
+  document.getElementById('subtitle').textContent =
+    bits.length ? bits.join(' \u00B7 ') : 'Set up your class in the Students tab';
+}
+
+/* ================= MARK ================= */
+function renderMark(){
+  if(!data.students.length){
+    return isCR()
+      ? '<div class="empty">No students loaded yet.<br>Ask your teacher to set up the class list.</div>'
+      : '<div class="empty">Add your students first.<br><br>'+
+        '<button class="btn sm" style="background:var(--ink);color:#fff" data-go="students">Add students</button></div>';
+  }
+
+  var divs=allDivisions();
+  var c=counts();
+  var existing = data.sessions[currentKey()];
+
+  return ''+
+  '<div class="card card-pad" style="margin-bottom:14px">'+
+    '<p class="label">Session</p>'+
+    (isCR()
+      ? '<div style="background:#F1F5F9;border-radius:9px;padding:9px 11px;'+
+        'font-size:14px;font-weight:500;color:#334155">'+
+        esc(ui.className||'No class assigned')+'</div>'
+      : '<div style="display:flex;gap:8px">'+
+          '<select id="classIn">'+optionList(myClasses(), ui.className, 'No class')+'</select>'+
+          '<button class="btn ghost sm" id="addClass" style="flex:0 0 auto" aria-label="Add class">+</button>'+
+        '</div>')+
+    (ui.addingClass ?
+      '<div style="display:flex;gap:8px;margin-top:8px">'+
+        '<input id="newClass" placeholder="New class, e.g. SY AIML">'+
+        '<button class="btn sm" id="saveClass" style="flex:0 0 auto">Save</button>'+
+        '<button class="linkish" id="cancelClass" style="flex:0 0 auto">Cancel</button>'+
+      '</div>' : '')+
+    '<div style="height:8px"></div>'+
+    '<input type="date" id="dateIn" value="'+ui.date+'">'+
+    '<div style="height:8px"></div>'+
+    '<div class="grid3">'+
+      '<select id="divIn">'+divs.map(function(d){
+        return '<option value="'+esc(d)+'"'+(d===ui.division?' selected':'')+'>Div '+esc(d)+'</option>';
+      }).join('')+'</select>'+
+      '<select id="batchIn">'+
+        ['All','1','2'].map(function(b){
+          return '<option value="'+b+'"'+(b===ui.batch?' selected':'')+'>'+
+            (b==='All'?'Full class':'Batch '+b)+'</option>';
+        }).join('')+
+      '</select>'+
+      '<select id="slotIn">'+SLOTS.map(function(s){
+        return '<option value="'+s+'"'+(s===ui.slot?' selected':'')+'>'+s+'</option>';
+      }).join('')+'</select>'+
+    '</div>'+
+    '<div style="height:8px"></div>'+
+    '<div style="display:flex;gap:8px">'+
+      '<select id="subjIn">'+optionList(data.subjects, ui.subject, 'No subject')+'</select>'+
+      (isCR()?'':'<button class="btn ghost sm" id="addSubj" style="flex:0 0 auto" aria-label="Add subject">+</button>')+
+    '</div>'+
+    (ui.addingSubject ?
+      '<div style="display:flex;gap:8px;margin-top:8px">'+
+        '<input id="newSubj" placeholder="New subject or practical" autofocus>'+
+        '<button class="btn sm" id="saveSubj" style="flex:0 0 auto">Save</button>'+
+        '<button class="linkish" id="cancelSubj" style="flex:0 0 auto">Cancel</button>'+
+      '</div>' : '')+
+    '<div style="height:8px"></div>'+
+    '<div style="display:flex;gap:8px">'+
+      '<select id="teachIn">'+optionList(data.teachers, ui.teacher, 'No teacher')+'</select>'+
+      (isCR()?'':'<button class="btn ghost sm" id="addTeach" style="flex:0 0 auto" aria-label="Add teacher">+</button>')+
+    '</div>'+
+    (ui.addingTeacher ?
+      '<div style="display:flex;gap:8px;margin-top:8px">'+
+        '<input id="newTeach" placeholder="Teacher name" autofocus>'+
+        '<button class="btn sm" id="saveTeach" style="flex:0 0 auto">Save</button>'+
+        '<button class="linkish" id="cancelTeach" style="flex:0 0 auto">Cancel</button>'+
+      '</div>' : '')+
+    (existing ? '<p class="hint">Already marked. Generating again will correct it.</p>' : '')+
+  '</div>'+
+
+  '<div class="pills">'+
+    '<div class="pill p"><div class="n" id="cP">'+c.present+'</div><div class="l">Present</div></div>'+
+    '<div class="pill a"><div class="n" id="cA">'+c.absent+'</div><div class="l">Absent</div></div>'+
+    '<div class="pill t"><div class="n">'+c.total+'</div><div class="l">Total</div></div>'+
+  '</div>'+
+
+  '<div class="toolbar">'+
+    '<input id="q" placeholder="Search name or roll no." value="'+esc(ui.query)+'">'+
+    '<button class="btn ghost sm" id="allP">All present</button>'+
+  '</div>'+
+  '<div class="card" id="list">'+markRows()+'</div>'+
+  '<div style="height:14px"></div>'+
+  '<button class="btn" id="gen">Generate attendance sheet</button>';
+}
+
+function markRows(){
+  var list=byRoll(scopeStudents().filter(function(s){ return matches(s,ui.query); }));
+  if(!list.length){
+    return '<div class="empty">'+
+      (ui.query ? 'No students match your search.'
+                : 'No students in '+esc(ui.className||'this class')+' Div '+esc(ui.division)+
+                  (ui.batch==='All'?'':' Batch '+esc(ui.batch))+
+                  '.<br>Assign divisions and batches in the Students tab.')+
+      '</div>';
+  }
+  return list.map(function(s){
+    var st=statusOf(s.id);
+    return '<div class="row" data-id="'+s.id+'">'+
+      '<div class="who"><div class="name">'+esc(s.name)+'</div>'+
+      '<div class="roll">'+(s.rollNo?'Roll No. '+esc(s.rollNo):'')+
+        (s.batch?' \u00B7 Batch '+esc(s.batch):'')+'</div></div>'+
+      '<div class="marks">'+
+        '<button class="mk'+(st==='present'?' on-p':'')+'" data-set="present" aria-label="Present">P</button>'+
+        '<button class="mk'+(st==='absent'?' on-a':'')+'" data-set="absent" aria-label="Absent">A</button>'+
+      '</div></div>';
+  }).join('');
+}
+function refreshPills(){
+  var c=counts();
+  var p=document.getElementById('cP'), a=document.getElementById('cA');
+  if(p) p.textContent=c.present;
+  if(a) a.textContent=c.absent;
+}
+
+/* ================= SHEET ================= */
+function currentSession(){ return ui.viewKey ? data.sessions[ui.viewKey] : null; }
+
+function renderSheet(){
+  var r=currentSession();
+  if(!r) return '<div class="empty">Mark a session and generate a sheet, or pick one from Day.</div>';
+  var pct=r.total?Math.round(r.present/r.total*100):0;
+
+  var rows=r.entries.map(function(e){
+    var on=e.status==='present';
+    return '<tr><td class="r">'+esc(e.rollNo)+'</td><td class="display">'+esc(e.name)+'</td>'+
+      '<td class="s right" style="color:'+(on?'var(--present)':'var(--absent)')+'">'+
+      (on?'\u2713 Present':'\u2715 Absent')+'</td></tr>';
+  }).join('');
+
+  return ''+
+  '<div class="noprint" style="margin-bottom:14px">'+
+    '<button class="btn" id="shareImg">Share as image</button>'+
+    '<div style="height:8px"></div>'+
+    '<div class="btn-row">'+
+      '<button class="btn ghost" id="saveImg">Save image</button>'+
+      '<button class="btn ghost" id="print">Print</button>'+
+      '<button class="btn ghost" id="csv">CSV</button>'+
+      '<button class="btn ghost" id="editDay" style="flex:0 0 auto">Edit</button>'+
+    '</div>'+
+  '</div>'+
+  '<div class="sheet">'+
+    '<div class="sheet-head">'+
+      (r.collegeName?'<h2 class="display">'+esc(r.collegeName)+'</h2>':'')+
+      (r.className?'<p class="cls">'+esc(r.className)+'</p>':'')+
+      '<p class="kicker">Attendance sheet</p>'+
+      '<p class="date display">'+longDate(r.date)+'</p>'+
+      '<p class="meta">'+esc(sessionLabel(r))+
+        (r.teacher?'<br>Conducted by '+esc(r.teacher):'')+'</p>'+
+    '</div>'+
+    '<table><thead><tr><th class="r">Roll</th><th>Name</th><th class="right">Status</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody></table>'+
+    '<div class="foot"><div style="font-size:13px">'+
+      '<div style="color:#64748B">Total: '+r.total+'</div>'+
+      '<div style="color:var(--present)">Present: '+r.present+'</div>'+
+      '<div style="color:var(--absent)">Absent: '+r.absent+'</div>'+
+    '</div><div class="stamp display">'+pct+'%</div></div>'+
+    '<div class="sign"><span>Signature: ________________</span>'+
+    '<span>'+new Date(r.savedAt).toLocaleString('en-IN')+'</span></div>'+
+  '</div>'+
+  renderNotify(r);
+}
+
+function renderNotify(r){
+  // Parent contact is a teacher responsibility, and the numbers stay hidden.
+  if(isCR()) return '';
+  var absents=r.entries.filter(function(e){ return e.status==='absent'; });
+  var out='<div class="noprint">';
+
+  if(!absents.length){
+    out+='<p class="sect">Parent alerts</p>'+
+      '<div class="card card-pad" style="text-align:center;color:var(--muted);font-size:14px">'+
+      'Nobody absent in this session.</div>';
+  }else{
+    r.notified=r.notified||[];
+    var rows=absents.map(function(e){
+      var s=findStudent(e.id);
+      var phone=normPhone(s&&s.phone);
+      var sent=r.notified.indexOf(e.id)>-1;
+      return '<div class="row">'+
+        '<div class="who"><div class="name">'+esc(e.name)+
+          (sent?' <span class="tag sent">Sent</span>':'')+'</div>'+
+        '<div class="roll">'+(e.rollNo?'Roll No. '+esc(e.rollNo)+' \u00B7 ':'')+
+        (phone?('+'+phone):'no number saved')+'</div></div>'+
+        (phone?'<button class="btn wa sm" data-wa="'+e.id+'">'+(sent?'Again':'WhatsApp')+'</button>'
+              :'<span class="tag nophone">No number</span>')+
+        '</div>';
+    }).join('');
+    out+='<p class="sect">Absent \u00B7 '+absents.length+'</p><div class="card">'+rows+'</div>'+
+      '<div style="height:8px"></div>'+
+      '<button class="linkish" id="tglTpl">'+(ui.showTpl?'Hide absent message':'Edit absent message')+'</button>'+
+      (ui.showTpl?
+        '<div class="card card-pad" style="margin-top:8px">'+
+          '<textarea id="tpl" rows="6">'+esc(data.settings.template)+'</textarea>'+
+          '<p class="hint">{name} {roll} {date} {session} {subject} {teacher} {class} {college}</p>'+
+          '<div style="height:8px"></div>'+
+          '<div class="btn-row"><button class="btn sm" id="tplSave" style="flex:1">Save</button>'+
+          '<button class="btn ghost sm" id="tplReset" style="flex:1">Reset</button></div>'+
+        '</div>':'');
+  }
+
+  /* Mid-day departure, only meaningful once evening is marked. */
+  if(r.slot==='Evening'){
+    var left=leftEarly(r.date, r.division, r.className);
+    r.leftNotified=r.leftNotified||[];
+    if(left.length){
+      var lrows=left.map(function(s){
+        var phone=normPhone(s.phone);
+        var sent=r.leftNotified.indexOf(s.id)>-1;
+        return '<div class="row">'+
+          '<div class="who"><div class="name">'+esc(s.name)+
+            (sent?' <span class="tag sent">Sent</span>':'')+'</div>'+
+          '<div class="roll">'+(s.rollNo?'Roll No. '+esc(s.rollNo)+' \u00B7 ':'')+
+          (phone?('+'+phone):'no number saved')+'</div></div>'+
+          (phone?'<button class="btn warn sm" data-left="'+s.id+'">'+(sent?'Again':'WhatsApp')+'</button>'
+                :'<span class="tag nophone">No number</span>')+
+          '</div>';
+      }).join('');
+      out+='<p class="sect" style="color:var(--left)">Left during the day \u00B7 '+left.length+'</p>'+
+        '<div class="card">'+lrows+'</div>'+
+        '<p class="hint">Present in the morning, absent now. Different message from a plain absence.</p>'+
+        '<div style="height:8px"></div>'+
+        '<button class="linkish" id="tglLeftTpl">'+(ui.showLeftTpl?'Hide message':'Edit this message')+'</button>'+
+        (ui.showLeftTpl?
+          '<div class="card card-pad" style="margin-top:8px">'+
+            '<textarea id="ltpl" rows="6">'+esc(data.settings.leftTemplate)+'</textarea>'+
+            '<div style="height:8px"></div>'+
+            '<div class="btn-row"><button class="btn sm" id="ltplSave" style="flex:1">Save</button>'+
+            '<button class="btn ghost sm" id="ltplReset" style="flex:1">Reset</button></div>'+
+          '</div>':'');
+    }else if(hasMorningAndEvening(r.date, r.division, r.className)){
+      out+='<p class="sect">Left during the day</p>'+
+        '<div class="card card-pad" style="text-align:center;color:var(--muted);font-size:14px">'+
+        'Nobody left mid-day. Everyone present in the morning is still here.</div>';
+    }else{
+      out+='<p class="sect">Left during the day</p>'+
+        '<div class="card card-pad" style="text-align:center;color:var(--muted);font-size:14px">'+
+        'Mark a Morning session for Div '+esc(r.division)+' on this date to compare against.</div>';
+    }
+  }
+
+  return out+'</div>';
+}
+
+function sendWA(studentId, session, isLeft){
+  var s=findStudent(studentId);
+  if(!s) return;
+  var phone=normPhone(s.phone);
+  if(!phone) return;
+
+  var entry=null;
+  session.entries.forEach(function(e){ if(e.id===studentId) entry=e; });
+  if(!entry) entry={ id:s.id, rollNo:s.rollNo, name:s.name, status:'absent' };
+
+  var tpl = isLeft ? data.settings.leftTemplate : data.settings.template;
+  var url='https://wa.me/'+phone+'?text='+encodeURIComponent(buildMsg(tpl, entry, session));
+
+  if(isLeft){
+    session.leftNotified=session.leftNotified||[];
+    if(session.leftNotified.indexOf(studentId)===-1) session.leftNotified.push(studentId);
+  }else{
+    session.notified=session.notified||[];
+    if(session.notified.indexOf(studentId)===-1) session.notified.push(studentId);
+  }
+  saveData();
+  window.open(url,'_blank');
+}
+
+/* ================= DAY ================= */
+function daySessions(date){
+  return Object.keys(data.sessions)
+    .filter(function(k){
+      var s=data.sessions[k];
+      return s.date===date && String(s.className||'')===String(ui.className||'');
+    })
+    .map(function(k){ return data.sessions[k]; })
+    .sort(function(a,b){
+      var si=SLOTS.indexOf(a.slot)-SLOTS.indexOf(b.slot);
+      if(si) return si;
+      return (a.division+a.batch).localeCompare(b.division+b.batch);
+    });
+}
+
+function renderDaily(){
+  var list=daySessions(ui.dayDate);
+  var head='<div class="toolbar"><input type="date" id="dayIn" value="'+ui.dayDate+'"></div>';
+
+  if(!list.length){
+    return head+'<div class="empty">No sessions marked on '+shortDate(ui.dayDate)+'.</div>';
+  }
+
+  var divs={};
+  list.forEach(function(s){ divs[s.division]=true; });
+
+  var leftBlocks=Object.keys(divs).sort().map(function(d){
+    if(!hasMorningAndEvening(ui.dayDate,d,ui.className)){
+      return '<div class="row"><div class="who"><div class="name">Div '+esc(d)+'</div>'+
+        '<div class="roll">Needs both a morning and an evening session</div></div></div>';
+    }
+    var left=leftEarly(ui.dayDate,d,ui.className);
+    if(!left.length){
+      return '<div class="row"><div class="who"><div class="name">Div '+esc(d)+'</div>'+
+        '<div class="roll" style="color:var(--present)">Nobody left mid-day</div></div></div>';
+    }
+    return '<div class="row"><div class="who"><div class="name">Div '+esc(d)+
+      ' \u2014 '+left.length+' left mid-day</div>'+
+      '<div class="roll">'+left.map(function(s){ return esc(s.name); }).join(', ')+'</div></div></div>';
+  }).join('');
+
+  return head+
+  '<div class="card">'+list.map(function(s){
+    var pct=s.total?Math.round(s.present/s.total*100):0;
+    return '<div class="row" data-open="'+esc(s.key)+'" style="cursor:pointer">'+
+      '<div class="who"><div class="name">'+esc(sessionLabel(s))+'</div>'+
+      '<div class="roll">'+s.present+' present \u00B7 '+s.absent+' absent'+
+      (s.teacher?' \u00B7 '+esc(s.teacher):'')+'</div></div>'+
+      '<span class="'+(pct<Number(data.settings.threshold||75)?'low':'ok-pct')+'" style="font-size:14px">'+pct+'%</span>'+
+      '</div>';
+  }).join('')+'</div>'+
+  '<p class="sect">Mid-day check</p><div class="card">'+leftBlocks+'</div>';
+}
+
+/* ================= MONTH ================= */
+function monthSessions(ym, division){
+  return Object.keys(data.sessions).map(function(k){ return data.sessions[k]; })
+    .filter(function(s){
+      if(s.date.indexOf(ym)!==0) return false;
+      if(String(s.className||'')!==String(ui.className||'')) return false;
+      if(division && s.division!==division) return false;
+      return true;
+    });
+}
+function monthStats(ym, division){
+  var sess=monthSessions(ym,division);
+  var map={}, order=[];
+  sess.forEach(function(s){
+    s.entries.forEach(function(e){
+      if(!map[e.id]){
+        var st=findStudent(e.id);
+        map[e.id]={ id:e.id, name:e.name, rollNo:e.rollNo,
+                    batch:(st&&st.batch)||'', present:0, held:0 };
+        order.push(e.id);
+      }
+      map[e.id].held++;
+      if(e.status==='present') map[e.id].present++;
+    });
+  });
+  var list=order.map(function(i){ return map[i]; });
+  list.sort(function(a,b){
+    return String(a.rollNo||'').localeCompare(String(b.rollNo||''),undefined,{numeric:true,sensitivity:'base'});
+  });
+  var days={};
+  sess.forEach(function(s){ days[s.date]=true; });
+  return { sessions:sess, list:list, days:Object.keys(days).sort() };
+}
+
+/**
+ * Day-wise view of the same data.
+ * A day is Full if every session that day was attended, Partial if some
+ * were, Absent if none. Day % counts a partial day as half, which is how
+ * a morning-only attendance should reasonably score.
+ */
+function dayStats(ym, division){
+  var sess=monthSessions(ym,division);
+  var dayset={};
+  sess.forEach(function(s){ dayset[s.date]=true; });
+
+  var map={}, order=[];
+  sess.forEach(function(s){
+    s.entries.forEach(function(e){
+      if(!map[e.id]){
+        var st=findStudent(e.id);
+        map[e.id]={ id:e.id, name:e.name, rollNo:e.rollNo,
+                    batch:(st&&st.batch)||'', days:{} };
+        order.push(e.id);
+      }
+      var d=map[e.id].days;
+      if(!d[s.date]) d[s.date]={held:0,present:0};
+      d[s.date].held++;
+      if(e.status==='present') d[s.date].present++;
+    });
+  });
+
+  var list=order.map(function(i){
+    var m=map[i];
+    var full=0, partial=0, absent=0, held=0;
+    Object.keys(m.days).forEach(function(d){
+      var v=m.days[d];
+      held++;
+      if(v.present===v.held) full++;
+      else if(v.present>0) partial++;
+      else absent++;
+    });
+    m.full=full; m.partial=partial; m.absentDays=absent; m.heldDays=held;
+    m.dayPercent = held ? Math.round((full + partial*0.5)/held*100) : 0;
+    return m;
+  });
+  list.sort(function(a,b){
+    return String(a.rollNo||'').localeCompare(String(b.rollNo||''),undefined,{numeric:true,sensitivity:'base'});
+  });
+
+  return { days:Object.keys(dayset).sort(), list:list };
+}
+/** P, half-day, or A for one student on one date. */
+function dayMark(m, date){
+  var v=m.days[date];
+  if(!v) return '-';
+  if(v.present===v.held) return 'P';
+  if(v.present>0) return '\u00BD';
+  return 'A';
+}
+
+function renderMonth(){
+  var divs=allDivisions();
+  var st=monthStats(ui.month, ui.division);
+  var th=Number(data.settings.threshold)||75;
+
+  var head='<div class="toolbar noprint">'+
+    '<input type="month" id="monthIn" value="'+ui.month+'">'+
+    '<select id="mDiv" style="width:auto;flex:0 0 auto">'+divs.map(function(d){
+      return '<option value="'+esc(d)+'"'+(d===ui.division?' selected':'')+'>Div '+esc(d)+'</option>';
+    }).join('')+'</select></div>';
+
+  if(!st.sessions.length){
+    return head+'<div class="empty">No sessions in '+monthName(ui.month)+' for Div '+esc(ui.division)+'.</div>';
+  }
+
+  var totH=0,totP=0;
+  st.list.forEach(function(s){ totH+=s.held; totP+=s.present; });
+  var classPct=totH?Math.round(totP/totH*100):0;
+
+  var ds=dayStats(ui.month, ui.division);
+  var byDay = ui.monthView==='day';
+
+  var defaulters = byDay
+    ? ds.list.filter(function(s){ return s.heldDays && s.dayPercent<th; })
+    : st.list.filter(function(s){ return s.held && (s.present/s.held*100)<th; });
+
+  var toggle='<div class="btn-row noprint" style="margin-bottom:12px">'+
+    '<button class="btn '+(byDay?'ghost':'')+'" id="vSess">By session</button>'+
+    '<button class="btn '+(byDay?'':'ghost')+'" id="vDay">By day</button></div>';
+
+  var rows, tableHead;
+  if(byDay){
+    tableHead='<tr><th class="r">Roll</th><th>Name</th>'+
+      '<th class="right">P / \u00BD / A</th><th class="right">%</th></tr>';
+    rows=ds.list.map(function(s){
+      var low=s.dayPercent<th;
+      return '<tr class="mrow"><td class="r">'+esc(s.rollNo)+'</td>'+
+        '<td class="display">'+esc(s.name)+
+          (s.batch?' <span class="tag b">B'+esc(s.batch)+'</span>':'')+
+          '<div class="bar"><i class="'+(low?'low':'')+'" style="width:'+s.dayPercent+'%"></i></div></td>'+
+        '<td class="right" style="font-size:13px;color:#64748B">'+
+          s.full+' / '+s.partial+' / '+s.absentDays+'</td>'+
+        '<td class="right '+(low?'low':'ok-pct')+'">'+s.dayPercent+'%</td></tr>';
+    }).join('');
+  }else{
+    tableHead='<tr><th class="r">Roll</th><th>Name</th>'+
+      '<th class="right">P/Held</th><th class="right">%</th></tr>';
+    rows=st.list.map(function(s){
+      var pct=s.held?Math.round(s.present/s.held*100):0;
+      var low=pct<th;
+      return '<tr class="mrow"><td class="r">'+esc(s.rollNo)+'</td>'+
+        '<td class="display">'+esc(s.name)+
+          (s.batch?' <span class="tag b">B'+esc(s.batch)+'</span>':'')+
+          '<div class="bar"><i class="'+(low?'low':'')+'" style="width:'+pct+'%"></i></div></td>'+
+        '<td class="right" style="font-size:13px;color:#64748B">'+s.present+'/'+s.held+'</td>'+
+        '<td class="right '+(low?'low':'ok-pct')+'">'+pct+'%</td></tr>';
+    }).join('');
+  }
+
+  return head+toggle+
+  '<div class="pills">'+
+    '<div class="pill t"><div class="n">'+ds.days.length+'</div><div class="l">Days</div></div>'+
+    '<div class="pill t"><div class="n">'+st.sessions.length+'</div><div class="l">Sessions</div></div>'+
+    '<div class="pill p"><div class="n">'+classPct+'%</div><div class="l">Div avg</div></div>'+
+  '</div>'+
+  (defaulters.length?
+    '<div class="pill a" style="margin-bottom:12px">'+
+      '<div class="n">'+defaulters.length+'</div>'+
+      '<div class="l">Below '+th+'% '+(byDay?'by day':'by session')+'</div></div>':'')+
+  '<div class="noprint" style="margin-bottom:14px">'+
+    '<button class="btn" id="mShareImg">Share as image</button>'+
+    '<div style="height:8px"></div>'+
+    '<div class="btn-row">'+
+      '<button class="btn ghost" id="mSaveImg">Save image</button>'+
+      '<button class="btn ghost" id="mPrint">Print</button>'+
+      '<button class="btn ghost" id="mCsv">CSV</button>'+
+    '</div>'+
+  '</div>'+
+  '<div class="sheet">'+
+    '<div class="sheet-head">'+
+      (data.classInfo.collegeName?'<h2 class="display">'+esc(data.classInfo.collegeName)+'</h2>':'')+
+      (ui.className?'<p class="cls">'+esc(ui.className)+' \u00B7 Division '+esc(ui.division)+'</p>':'')+
+      '<p class="kicker">Monthly attendance \u00B7 '+(byDay?'day-wise':'session-wise')+'</p>'+
+      '<p class="date display">'+monthName(ui.month)+'</p>'+
+      '<p class="meta">'+st.sessions.length+' sessions across '+ds.days.length+' working days'+
+        (byDay?'<br>P = all sessions attended \u00B7 \u00BD = part of the day \u00B7 A = absent':'')+'</p>'+
+    '</div>'+
+    '<table><thead>'+tableHead+'</thead><tbody>'+rows+'</tbody></table>'+
+    '<div class="sign"><span>Signature: ________________</span><span>Minimum '+th+'%</span></div>'+
+  '</div>'+
+  (defaulters.length?
+    '<p class="sect">Below '+th+'% \u00B7 '+defaulters.length+'</p><div class="card">'+
+    defaulters.map(function(s){
+      var pct = byDay ? s.dayPercent : Math.round(s.present/s.held*100);
+      var detail = byDay
+        ? (s.full+' full, '+s.partial+' half of '+s.heldDays+' days')
+        : (s.present+' of '+s.held+' sessions');
+      return '<div class="row"><div class="who"><div class="name">'+esc(s.name)+'</div>'+
+        '<div class="roll">'+(s.rollNo?'Roll No. '+esc(s.rollNo)+' \u00B7 ':'')+detail+'</div></div>'+
+        '<span class="low" style="font-size:15px">'+pct+'%</span></div>';
+    }).join('')+'</div>':'')+
+  (isCR()?'':'<div class="card card-pad noprint" style="margin-top:14px">'+
+    '<p class="label">Minimum attendance required</p>'+
+    '<div style="display:flex;gap:8px;align-items:center">'+
+      '<input type="number" id="thIn" value="'+th+'" min="1" max="100" style="width:90px">'+
+      '<span style="font-size:13px;color:var(--muted)">% (MSBTE default 75%)</span>'+
+    '</div></div>');
+}
+
+/* ================= STUDENTS ================= */
+function renderStudents(){
+  var divs=allDivisions();
+  return ''+
+  '<div class="card card-pad">'+
+    '<p class="label">College</p>'+
+    '<input id="college" placeholder="College name" value="'+esc(data.classInfo.collegeName)+'">'+
+  '</div>'+
+
+  '<div class="card card-pad">'+
+    '<p class="label">Classes</p>'+
+    listEditor('class', allClasses(), ui.confirmClass, 'No classes yet. Add one below.')+
+    '<div style="height:8px"></div>'+
+    '<div style="display:flex;gap:8px">'+
+      '<input id="addClassIn" placeholder="Add a class, e.g. TY AIML">'+
+      '<button class="btn sm" id="addClassBtn" style="flex:0 0 auto">Add</button>'+
+    '</div>'+
+    '<div style="height:10px"></div>'+
+    '<p class="label" style="margin:0 0 6px">Working on</p>'+
+    '<select id="activeClass">'+optionList(myClasses(), ui.className, 'No class')+'</select>'+
+    '<p class="hint">Students you add and lists you view below belong to this class.</p>'+
+  '</div>'+
+
+  '<div class="card card-pad">'+
+    '<p class="label">Add student</p>'+
+    '<div style="display:flex;gap:8px">'+
+      '<input id="nRoll" placeholder="Roll" style="width:70px;flex:0 0 auto">'+
+      '<input id="nName" placeholder="Full name">'+
+    '</div>'+
+    '<div style="height:8px"></div>'+
+    '<div class="grid3">'+
+      '<select id="nDiv">'+divs.map(function(d){
+        return '<option value="'+esc(d)+'"'+(d===ui.division?' selected':'')+'>Div '+esc(d)+'</option>';
+      }).join('')+'</select>'+
+      '<select id="nBatch"><option value="1">Batch 1</option><option value="2">Batch 2</option></select>'+
+      '<button class="btn sm" id="add">Add</button>'+
+    '</div>'+
+    '<div style="height:8px"></div>'+
+    '<input id="nPhone" placeholder="Parent WhatsApp no." inputmode="numeric">'+
+    '<div style="height:10px"></div>'+
+    '<button class="linkish" id="tglBulk">'+(ui.showBulk?'Hide bulk add':'Bulk add (paste a list)')+'</button>'+
+    (ui.showBulk?
+      '<div style="margin-top:8px">'+
+        '<textarea id="bulk" rows="4" placeholder="Roll, Name, Phone, Division, Batch &#8212; one per line:&#10;1, Aarav Sharma, 9876543210, A, 1&#10;2, Priya Patil, 9812345678, A, 1"></textarea>'+
+        '<p class="hint">Division and batch are optional. Missing ones use the dropdowns above. Same roll in the same division updates instead of duplicating.</p>'+
+        '<div style="height:8px"></div>'+
+        '<button class="btn sm" id="bulkAdd">Add all</button>'+
+      '</div>':'')+
+  '</div>'+
+
+  (isOwner() ?
+  '<div class="card card-pad">'+
+    '<p class="label">People &amp; logins</p>'+
+    (loginsOn()
+      ? '<div style="border:1px solid var(--line);border-radius:9px;overflow:hidden">'+
+        data.users.map(function(u){
+          return '<div class="row" style="padding:8px 10px">'+
+            '<div class="who"><div class="name" style="font-size:14px">'+esc(u.name)+'</div>'+
+            '<div class="roll">'+esc(roleLabel(u))+' \u00B7 PIN '+esc(u.pin)+'</div></div>'+
+            (u.role==='owner' && ownerCount()<2
+              ? '<span class="tag b">owner</span>'
+              : '<button data-deluser="'+esc(u.id)+'" style="color:#CBD5E1;font-size:13px">Remove</button>')+
+          '</div>';
+        }).join('')+'</div>'
+      : '<p class="hint" style="margin:0">No logins yet. The app opens straight to '+
+        'the register. Add the first person to turn login on.</p>')+
+    '<div style="height:10px"></div>'+
+    '<p class="label" style="margin:0 0 6px">Add a person</p>'+
+    '<input id="uName" placeholder="Name">'+
+    '<div style="height:8px"></div>'+
+    '<div class="grid2">'+
+      '<input id="uPin" inputmode="numeric" placeholder="PIN (4-6 digits)">'+
+      '<select id="uRole">'+
+        '<option value="teacher">Teacher</option>'+
+        '<option value="cr">Class CR</option>'+
+        '<option value="owner">Owner (full access)</option>'+
+      '</select>'+
+    '</div>'+
+    '<div style="height:8px"></div>'+
+    '<select id="uClass">'+optionList(allClasses(), ui.className, 'All classes')+'</select>'+
+    '<div style="height:8px"></div>'+
+    '<button class="btn sm" id="uAdd">Add person</button>'+
+    '<p class="hint">A CR sees only the class chosen here, and never parent phone '+
+    'numbers. A teacher sees that class; leave it blank for all. '+
+    '<b>Keep a backup</b> \u2014 a forgotten PIN can only be fixed by restoring one.</p>'+
+  '</div>' : '')+
+
+  '<div class="card card-pad">'+
+    '<p class="label">Subjects &amp; practicals</p>'+
+    listEditor('subj', data.subjects, ui.confirmSubj, 'No subjects added yet.')+
+    '<div style="height:8px"></div>'+
+    '<div style="display:flex;gap:8px">'+
+      '<input id="addSubjIn" placeholder="Add a subject or practical">'+
+      '<button class="btn sm" id="addSubjBtn" style="flex:0 0 auto">Add</button>'+
+    '</div>'+
+  '</div>'+
+
+  '<div class="card card-pad">'+
+    '<p class="label">Teachers</p>'+
+    listEditor('teach', data.teachers, ui.confirmTeach, 'No teachers added yet.')+
+    '<div style="height:8px"></div>'+
+    '<div style="display:flex;gap:8px">'+
+      '<input id="addTeachIn" placeholder="Add a teacher">'+
+      '<button class="btn sm" id="addTeachBtn" style="flex:0 0 auto">Add</button>'+
+    '</div>'+
+    '<p class="hint">Removing a teacher only takes them off the dropdown. '+
+    'Sessions they already marked keep their name.</p>'+
+  '</div>'+
+
+  '<div class="card card-pad">'+
+    '<p class="label">Split a division into batches</p>'+
+    '<p class="hint" style="margin:0 0 9px">Splits Div '+esc(ui.division)+' by roll order: lower half Batch 1, upper half Batch 2.</p>'+
+    '<button class="btn ghost sm" id="splitBtn">Auto-split Div '+esc(ui.division)+'</button>'+
+  '</div>'+
+
+  '<div class="card card-pad">'+
+    '<p class="label">Shared data (all teachers)</p>'+
+    '<input id="fbUrl" placeholder="Realtime Database URL" value="'+esc(data.settings.fbUrl||'')+'">'+
+    '<div style="height:8px"></div>'+
+    '<input id="classCode" placeholder="Class code (same for every teacher)" value="'+esc(data.settings.classCode||'')+'">'+
+    '<div style="height:10px"></div>'+
+    '<button class="btn ghost sm" id="testBtn" style="width:100%">Test connection</button>'+
+    '<div style="height:8px"></div>'+
+    '<div class="btn-row">'+
+      '<button class="btn ghost sm" id="upBtn" style="flex:1">Upload mine</button>'+
+      '<button class="btn ghost sm" id="downBtn" style="flex:1">Download all</button>'+
+    '</div>'+
+    '<p class="hint" id="syncMsg">'+
+      (fbReady()
+        ? (syncState.live ? 'Live. Updates from other teachers arrive automatically.'
+           : (data.settings.lastSync
+              ? 'Last synced '+new Date(data.settings.lastSync).toLocaleString('en-IN')
+              : 'Set up. Tap Test connection.'))
+        : 'Not connected. Marking works offline without this.')+
+    '</p>'+
+    '<p class="hint">Parent phone numbers are never uploaded. They stay on this device.</p>'+
+  '</div>'+
+
+  '<div class="card card-pad">'+
+    '<p class="label">Backup</p>'+
+    '<div class="btn-row">'+
+      '<button class="btn ghost sm" id="expBtn" style="flex:1">Save backup file</button>'+
+      '<button class="btn ghost sm" id="impBtn" style="flex:1">Restore backup</button>'+
+    '</div>'+
+    '<input type="file" id="impFile" accept=".json,application/json" style="display:none">'+
+    '<div style="height:10px"></div>'+
+    '<button class="linkish" id="tglPaste">'+
+      (ui.showPaste?'Hide transfer by text':'Transfer by text instead')+'</button>'+
+    (ui.showPaste ?
+      '<div style="margin-top:8px">'+
+        '<div class="btn-row">'+
+          '<button class="btn ghost sm" id="copyOut" style="flex:1">Copy my data</button>'+
+        '</div>'+
+        '<div style="height:8px"></div>'+
+        '<textarea id="pasteIn" rows="4" placeholder="Paste copied data here, then tap Restore"></textarea>'+
+        '<div style="height:8px"></div>'+
+        '<button class="btn sm" id="pasteGo">Restore from text</button>'+
+        '<p class="hint" id="pasteMsg">Send the copied text to your other device '+
+        'any way you like, then paste it here.</p>'+
+      '</div>' : '')+
+    '<p class="hint">Clearing browser data wipes everything. Keep a backup in Drive.</p>'+
+  '</div>'+
+
+  '<div style="height:14px"></div>'+
+  '<input id="sq" placeholder="Search students" value="'+esc(ui.sQuery)+'">'+
+  '<div style="height:10px"></div>'+
+  '<div class="card" id="sList">'+studentRows()+'</div>';
+}
+
+/* One renderer for both lists. kind is 'subj' or 'teach'. */
+function listEditor(kind, items, confirming, emptyMsg){
+  var list=(items||[]).slice().sort(function(a,b){
+    return String(a).localeCompare(String(b));
+  });
+  if(!list.length){
+    return '<p class="hint" style="margin:0">'+esc(emptyMsg)+'</p>';
+  }
+  return '<div style="border:1px solid var(--line);border-radius:9px;overflow:hidden">'+
+    list.map(function(it){
+      if(confirming===it){
+        return '<div class="row" style="padding:8px 10px">'+
+          '<div class="who"><div class="name" style="font-size:13px">Remove '+esc(it)+'?</div></div>'+
+          '<div style="display:flex;gap:6px">'+
+            '<button class="btn sm" data-rm="'+kind+'" data-val="'+esc(it)+'" style="background:var(--absent)">Remove</button>'+
+            '<button class="btn ghost sm" data-rmno="'+kind+'">Cancel</button>'+
+          '</div></div>';
+      }
+      var used = usageCount(kind, it);
+      var label = kind==='class' ? used : (used ? used+' session'+(used>1?'s':'') : '');
+      return '<div class="row" style="padding:8px 10px">'+
+        '<div class="who"><div class="name" style="font-size:14px">'+esc(it)+'</div>'+
+        (label?'<div class="roll">'+esc(label)+'</div>':'')+'</div>'+
+        '<button data-ask="'+kind+'" data-val="'+esc(it)+'" style="color:#CBD5E1;font-size:13px">Remove</button>'+
+        '</div>';
+    }).join('')+'</div>';
+}
+
+/* How many recorded sessions reference this subject or teacher. */
+function usageCount(kind, val){
+  if(kind==='class'){
+    return classStudents(val).length + ' students';
+  }
+  var n=0;
+  Object.keys(data.sessions||{}).forEach(function(k){
+    var ss=data.sessions[k];
+    if(kind==='subj' ? ss.subject===val : ss.teacher===val) n++;
+  });
+  return n;
+}
+
+function studentRows(){
+  var list=byRoll(classStudents().filter(function(s){ return matches(s,ui.sQuery); }));
+  if(!list.length){
+    return '<div class="empty">'+
+      (ui.sQuery ? 'No students match your search.'
+                 : 'No students in '+esc(ui.className||'this class')+' yet.')+'</div>';
+  }
+  var divs=allDivisions();
+  return list.map(function(s){
+    if(ui.editingId===s.id){
+      return '<div class="row" data-id="'+s.id+'" style="display:block">'+
+        '<div style="display:flex;gap:6px;margin-bottom:6px">'+
+          '<input class="eRoll" value="'+esc(s.rollNo)+'" style="width:60px;flex:0 0 auto">'+
+          '<input class="eName" value="'+esc(s.name)+'">'+
+        '</div>'+
+        '<div class="grid2" style="margin-bottom:6px">'+
+          '<select class="eDiv">'+divs.map(function(d){
+            return '<option value="'+esc(d)+'"'+(d===s.division?' selected':'')+'>Div '+esc(d)+'</option>';
+          }).join('')+'</select>'+
+          '<select class="eBatch">'+['1','2'].map(function(b){
+            return '<option value="'+b+'"'+(b===String(s.batch)?' selected':'')+'>Batch '+b+'</option>';
+          }).join('')+'</select>'+
+        '</div>'+
+        '<div style="display:flex;gap:6px;align-items:center">'+
+          '<input class="ePhone" value="'+esc(s.phone||'')+'" placeholder="Parent WhatsApp no." inputmode="numeric">'+
+          '<button class="btn sm" data-act="saveEdit" style="flex:0 0 auto">Save</button>'+
+          '<button class="linkish" data-act="cancelEdit" style="flex:0 0 auto">Cancel</button>'+
+        '</div></div>';
+    }
+    if(ui.confirmId===s.id){
+      return '<div class="row" data-id="'+s.id+'">'+
+        '<div class="who"><div class="name">Remove '+esc(s.name)+'?</div></div>'+
+        '<div style="display:flex;gap:8px">'+
+          '<button class="btn sm" data-act="doDel" style="background:var(--absent)">Remove</button>'+
+          '<button class="btn ghost sm" data-act="noDel">Cancel</button>'+
+        '</div></div>';
+    }
+    var ph=normPhone(s.phone);
+    return '<div class="row" data-id="'+s.id+'">'+
+      '<div class="who"><div class="name">'+esc(s.name)+
+        ' <span class="tag b">'+esc(s.division||'?')+(s.batch?'-'+esc(s.batch):'')+'</span></div>'+
+      '<div class="roll">'+(s.rollNo?'Roll No. '+esc(s.rollNo)+' \u00B7 ':'')+
+        (ph?('+'+ph):'<span style="color:var(--left)">no parent number</span>')+'</div></div>'+
+      '<div style="display:flex;gap:14px;color:#CBD5E1;font-size:13px">'+
+        '<button data-act="edit">Edit</button><button data-act="del">Delete</button>'+
+      '</div></div>';
+  }).join('');
+}
+
+/* ================= FIREBASE SYNC =================
+   Realtime Database over plain REST. No SDK, so the app stays a single
+   file and still works offline - it just syncs when a network exists.
+   Live updates arrive over EventSource, so other teachers' sessions
+   appear without anyone pressing anything.
+   ================================================ */
+
+var syncState = { busy:false, stream:null, live:false };
+
+function fbBase(){
+  return String(data.settings.fbUrl||'').trim().replace(/\/+$/,'');
+}
+function fbReady(){
+  return !!(fbBase() && String(data.settings.classCode||'').trim());
+}
+/* Firebase keys cannot contain . $ # [ ] or / */
+function fbKey(k){ return String(k).replace(/[.$#\[\]\/|]/g,'_'); }
+
+/* The class name is part of the path, so two classes sharing a code
+   still land in separate branches. */
+function fbPath(sub){
+  return fbBase() + '/attendance/' +
+         fbKey(String(data.settings.classCode).trim()) + '/' +
+         fbKey(ui.className || 'default') + sub + '.json';
+}
+
+function fbGet(sub){
+  return fetch(fbPath(sub), { cache:'no-store' }).then(function(r){
+    return r.json().then(function(j){
+      if(j && j.error) throw new Error(j.error);
+      return j;
+    });
+  });
+}
+function fbPut(sub, obj){
+  return fetch(fbPath(sub), {
+    method:'PUT',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(obj)
+  }).then(function(r){
+    return r.json().then(function(j){
+      if(j && j.error) throw new Error(j.error);
+      return j;
+    });
+  });
+}
+
+function setSync(msg, ok){
+  var el=document.getElementById('syncMsg');
+  if(el){
+    el.innerHTML=msg;
+    el.style.color = ok===false ? 'var(--absent)' : (ok?'var(--present)':'var(--muted)');
+  }
+}
+
+function explain(err){
+  var m=String(err && err.message || err);
+  if(m.indexOf('Permission denied')>-1){
+    return 'Database rules are blocking this. In Firebase: Realtime Database ' +
+           '&rarr; Rules, paste the rules from the guide, then Publish.';
+  }
+  if(m.indexOf('Failed to fetch')>-1 || m.indexOf('NetworkError')>-1){
+    return 'Could not reach the database. Check the URL and your internet.';
+  }
+  if(m.indexOf('Unexpected token')>-1){
+    return 'That URL did not return database data. Copy the URL shown at the top ' +
+           'of the Realtime Database page.';
+  }
+  return m;
+}
+
+/* ---- pushes ---- */
+
+/* Phone numbers are deliberately NOT uploaded. They stay on the device
+   that entered them, so a shared database never holds parent contacts. */
+function pushRoster(){
+  if(!fbReady()) return Promise.resolve(null);
+  var obj={};
+  classStudents().forEach(function(s){
+    obj[fbKey((s.division||'A')+'_'+(s.rollNo||s.id))] = {
+      rollNo:s.rollNo||'', name:s.name||'',
+      division:s.division||'A', batch:s.batch||'1'
+    };
+  });
+  return fbPut('/roster', obj);
+}
+
+function pushSession(key){
+  if(!fbReady()) return Promise.resolve(null);
+  var s=data.sessions[key];
+  if(!s) return Promise.resolve(null);
+  return fbPut('/sessions/'+fbKey(key), {
+    date:s.date, division:s.division, batch:s.batch, slot:s.slot,
+    subject:s.subject||'', teacher:s.teacher||'',
+    entries:s.entries.map(function(e){
+      return { rollNo:e.rollNo, name:e.name, status:e.status };
+    }),
+    updatedAt: Date.now()
+  });
+}
+
+/* ---- merge ---- */
+
+function mergeRemote(all, quiet){
+  var addedStudents=0, mergedSessions=0;
+
+  var roster=(all && all.roster) || {};
+  Object.keys(roster).forEach(function(k){
+    var rs=roster[k]; if(!rs || !rs.rollNo) return;
+    var ex=findByRoll(rs.rollNo, rs.division);
+    if(ex){
+      if(rs.name) ex.name=rs.name;
+      if(rs.division) ex.division=rs.division;
+      if(rs.batch) ex.batch=rs.batch;
+      // phone left alone on purpose - it is local only
+    }else{
+      data.students.push({ id:genId(), rollNo:rs.rollNo, name:rs.name||'',
+        phone:'', division:rs.division||'A', batch:rs.batch||'1' });
+      addedStudents++;
+    }
+  });
+
+  var sess=(all && all.sessions) || {};
+  Object.keys(sess).forEach(function(k){
+    var rm=sess[k];
+    if(!rm || !rm.date || !rm.entries) return;
+    var key=sessionKey(ui.className, rm.date, rm.division, rm.batch, rm.slot);
+    var ex=data.sessions[key];
+
+    // Ours is newer than theirs, so keep ours.
+    if(ex && ex.updatedAt && rm.updatedAt && ex.updatedAt > rm.updatedAt) return;
+
+    var entries=(rm.entries||[]).map(function(re){
+      var local=findByRoll(re.rollNo, rm.division, ui.className);
+      return { id: local?local.id:('r_'+rm.division+'_'+re.rollNo),
+               rollNo:re.rollNo, name:re.name, status:re.status };
+    });
+    var present=entries.filter(function(e){ return e.status==='present'; }).length;
+
+    data.sessions[key]={
+      key:key, date:rm.date, division:rm.division, batch:rm.batch, slot:rm.slot,
+      subject:rm.subject||'', teacher:rm.teacher||'',
+      collegeName:data.classInfo.collegeName,
+      className:ui.className,
+      entries:entries, total:entries.length, present:present,
+      absent:entries.length-present,
+      notified: ex&&ex.notified?ex.notified:[],
+      leftNotified: ex&&ex.leftNotified?ex.leftNotified:[],
+      updatedAt: rm.updatedAt||Date.now(),
+      savedAt: ex?ex.savedAt:new Date().toISOString()
+    };
+    mergedSessions++;
+  });
+
+  normalise();
+  loadMarks();
+  saveData();
+  if(!quiet){
+    setSync('Synced. '+Object.keys(data.sessions).length+' sessions, '+
+            data.students.length+' students.',true);
+  }
+  return { addedStudents:addedStudents, mergedSessions:mergedSessions };
+}
+
+/* Never yank the page out from under someone mid-typing. */
+function safeRender(){
+  var a=document.activeElement;
+  if(a && (a.tagName==='INPUT' || a.tagName==='TEXTAREA')) return;
+  render();
+}
+
+/* ---- live stream ---- */
+
+function startStream(){
+  if(!fbReady() || typeof EventSource === 'undefined') return;
+  stopStream();
+  try{
+    var es = new EventSource(fbPath(''));
+    syncState.stream = es;
+
+    var onChange = function(){
+      // Any remote change: re-read the branch and merge.
+      fbGet('').then(function(all){
+        mergeRemote(all, true);
+        syncState.live = true;
+        setSync('Live. Updates from other teachers arrive automatically.',true);
+        safeRender();
+      }).catch(function(){});
+    };
+
+    es.addEventListener('put', onChange);
+    es.addEventListener('patch', onChange);
+    es.onerror = function(){ syncState.live=false; };
+  }catch(e){}
+}
+function stopStream(){
+  if(syncState.stream){ try{ syncState.stream.close(); }catch(e){} }
+  syncState.stream=null; syncState.live=false;
+}
+
+/* Roster changes propagate in the background; failures are not worth
+   interrupting someone typing in a student list. */
+function pushRosterQuiet(){
+  if(!fbReady() || !data.settings.autoSync) return;
+  pushRoster().catch(function(){});
+}
+
+/* ---- manual actions ---- */
+
+function testConnection(){
+  var url=fbBase(), code=String(data.settings.classCode||'').trim();
+  if(!url){ setSync('Paste your Realtime Database URL first.',false); return; }
+  if(url.indexOf('firebase')===-1 && url.indexOf('firebasedatabase')===-1){
+    setSync('That does not look like a Realtime Database URL. It should contain ' +
+            '<b>firebaseio.com</b> or <b>firebasedatabase.app</b>.',false);
+    return;
+  }
+  if(url.indexOf('console.firebase.google.com')>-1){
+    setSync('That is the Firebase <b>console</b> link. You need the database URL ' +
+            'shown at the top of the Realtime Database page.',false);
+    return;
+  }
+  if(!code){ setSync('Set a class code. Every teacher must use the same one.',false); return; }
+
+  setSync('Testing...',null);
+  fbPut('/ping', Date.now())
+    .then(function(){ return fbGet(''); })
+    .then(function(all){
+      var n = all && all.sessions ? Object.keys(all.sessions).length : 0;
+      var r = all && all.roster ? Object.keys(all.roster).length : 0;
+      setSync('Connected. Database has '+r+' students and '+n+' sessions.',true);
+      startStream();
+    })
+    .catch(function(err){ setSync(explain(err),false); });
+}
+
+function syncUp(){
+  if(!fbReady()){ setSync('Add the database URL and class code first.',false); return; }
+  if(syncState.busy) return;
+  syncState.busy=true; setSync('Uploading...',null);
+
+  var keys=Object.keys(data.sessions);
+  pushRoster().then(function(){
+    return keys.reduce(function(chain,k){
+      return chain.then(function(){ return pushSession(k); });
+    }, Promise.resolve());
+  }).then(function(){
+    syncState.busy=false;
+    data.settings.lastSync=new Date().toISOString();
+    saveData();
+    setSync('Uploaded '+data.students.length+' students and '+keys.length+' sessions.',true);
+    startStream();
+  }).catch(function(err){
+    syncState.busy=false;
+    setSync('Upload failed. '+explain(err),false);
+  });
+}
+
+function syncDown(){
+  if(!fbReady()){ setSync('Add the database URL and class code first.',false); return; }
+  if(syncState.busy) return;
+  syncState.busy=true; setSync('Downloading...',null);
+
+  fbGet('').then(function(all){
+    syncState.busy=false;
+    data.settings.lastSync=new Date().toISOString();
+    mergeRemote(all, false);
+    render();
+    startStream();
+  }).catch(function(err){
+    syncState.busy=false;
+    setSync('Download failed. '+explain(err),false);
+  });
+}
+
+/* ================= render + bind ================= */
+function render(){
+  renderHeader();
+
+  var lock=document.getElementById('lockBtn');
+  if(lock) lock.style.display = (isCR() && !loginsOn()) ? 'block' : 'none';
+  var out=document.getElementById('outBtn');
+  if(out) out.style.display = (loginsOn() && currentUser()) ? 'block' : 'none';
+
+  /* A CR is tied to one class. Re-asserted on every render so nothing
+     reachable in the UI can move them to another class's data. */
+  var pinned = isCR() ? crClassOf() : '';
+  if(pinned){
+    var avail=allClasses();
+    if(avail.indexOf(pinned)>-1){
+      if(ui.className !== pinned){
+        ui.className = pinned;
+        var dv=allDivisions();
+        if(dv.indexOf(ui.division)===-1) ui.division=dv[0];
+        loadMarks();
+      }
+    }
+  }
+
+  // The Students tab is the whole admin surface, so CR mode simply loses it.
+  var navBtns=document.querySelectorAll('nav button');
+  navBtns.forEach(function(b){
+    b.style.display = (isCR() && b.dataset.tab==='students') ? 'none' : '';
+  });
+  if(isCR() && ui.tab==='students') ui.tab='mark';
+
+  var m=document.getElementById('main');
+
+  if(needsLogin()){
+    document.querySelectorAll('nav button').forEach(function(b){ b.style.display='none'; });
+    var lb=document.getElementById('lockBtn');
+    if(lb) lb.style.display='none';
+    m.innerHTML=renderLogin();
+    bind(); window.scrollTo(0,0); return;
+  }
+  document.querySelectorAll('nav button').forEach(function(b){
+    if(!(isCR() && b.dataset.tab==='students')) b.style.display='';
+  });
+
+  if(ui.unlocking){ m.innerHTML=renderUnlock(); bind(); window.scrollTo(0,0); return; }
+  if(ui.tab==='mark') m.innerHTML=renderMark();
+  else if(ui.tab==='sheet') m.innerHTML=renderSheet();
+  else if(ui.tab==='daily') m.innerHTML=renderDaily();
+  else if(ui.tab==='month') m.innerHTML=renderMonth();
+  else m.innerHTML=renderStudents();
+  document.querySelectorAll('nav button').forEach(function(b){
+    b.classList.toggle('on', b.dataset.tab===ui.tab);
+  });
+  bind();
+  window.scrollTo(0,0);
+}
+
+function renderLogin(){
+  var users=(data.users||[]).slice().sort(function(a,b){
+    return String(a.name).localeCompare(String(b.name));
+  });
+
+  if(ui.loginPick){
+    var u=null;
+    users.forEach(function(x){ if(x.id===ui.loginPick) u=x; });
+    if(u){
+      return '<div class="card card-pad" style="margin-top:24px">'+
+        '<p class="label">Signing in as</p>'+
+        '<p class="display" style="font-size:19px;color:#0F172A;margin:0 0 2px">'+esc(u.name)+'</p>'+
+        '<p class="hint" style="margin:0 0 12px">'+esc(roleLabel(u))+'</p>'+
+        '<input id="loginPin" type="password" inputmode="numeric" placeholder="PIN" autocomplete="off">'+
+        '<div style="height:10px"></div>'+
+        '<div class="btn-row">'+
+          '<button class="btn" id="loginGo" style="flex:1">Sign in</button>'+
+          '<button class="btn ghost" id="loginBack" style="flex:1">Back</button>'+
+        '</div>'+
+        (ui.loginMsg?'<p class="hint" style="color:var(--absent)">'+esc(ui.loginMsg)+'</p>':'')+
+      '</div>';
+    }
+  }
+
+  return '<div style="margin-top:24px">'+
+    '<p class="sect" style="margin-top:0">Who is using the app?</p>'+
+    '<div class="card">'+users.map(function(u){
+      return '<div class="row" data-login="'+esc(u.id)+'" style="cursor:pointer">'+
+        '<div class="who"><div class="name">'+esc(u.name)+'</div>'+
+        '<div class="roll">'+esc(roleLabel(u))+'</div></div>'+
+        '<div style="color:#CBD5E1">\u203A</div></div>';
+    }).join('')+'</div>'+
+  '</div>';
+}
+
+function ownerCount(){
+  var n=0;
+  (data.users||[]).forEach(function(u){ if(u.role==='owner') n++; });
+  return n;
+}
+
+function roleLabel(u){
+  if(u.role==='owner') return 'Full access';
+  if(u.role==='cr') return 'Class CR \u00B7 '+((u.classes||[])[0]||'no class');
+  var n=(u.classes||[]).length;
+  return 'Teacher \u00B7 '+(n?u.classes.join(', '):'no classes assigned');
+}
+
+function renderUnlock(){
+  return '<div class="card card-pad" style="margin-top:24px">'+
+    '<p class="label">Teacher access</p>'+
+    '<p class="hint" style="margin:0 0 10px">Enter the PIN to leave CR mode.</p>'+
+    '<input id="pinIn" type="password" inputmode="numeric" placeholder="PIN" autocomplete="off">'+
+    '<div style="height:10px"></div>'+
+    '<div class="btn-row">'+
+      '<button class="btn" id="pinGo" style="flex:1">Unlock</button>'+
+      '<button class="btn ghost" id="pinCancel" style="flex:1">Cancel</button>'+
+    '</div>'+
+    (ui.pinMsg?'<p class="hint" style="color:var(--absent)">'+esc(ui.pinMsg)+'</p>':'')+
+  '</div>';
+}
+
+function loadMarks(){
+  var s=data.sessions[currentKey()];
+  ui.marks={};
+  if(s && s.entries) s.entries.forEach(function(e){ ui.marks[e.id]=e.status; });
+  if(s && s.subject) ui.subject=s.subject;
+  if(s && s.teacher) ui.teacher=s.teacher;
+}
+
+function bind(){
+  var $=function(id){ return document.getElementById(id); };
+
+  if(needsLogin()){
+    var main=$('main');
+    main.onclick=function(e){
+      var row=e.target.closest('[data-login]');
+      if(row){ ui.loginPick=row.dataset.login; ui.loginMsg=''; render(); }
+    };
+    if($('loginBack')) $('loginBack').onclick=function(){
+      ui.loginPick=null; ui.loginMsg=''; render();
+    };
+    if($('loginGo')) $('loginGo').onclick=function(){
+      var u=null;
+      data.users.forEach(function(x){ if(x.id===ui.loginPick) u=x; });
+      if(u && $('loginPin').value.trim()===String(u.pin)){
+        ui.userId=u.id; ui.loginPick=null; ui.loginMsg='';
+        var cls=myClasses();
+        if(cls.indexOf(ui.className)===-1) ui.className=cls[0]||'';
+        var dv=allDivisions();
+        if(dv.indexOf(ui.division)===-1) ui.division=dv[0];
+        ui.tab='mark';
+        loadMarks(); render();
+      }else{
+        ui.loginMsg='Wrong PIN.'; render();
+      }
+    };
+    if($('loginPin')) $('loginPin').onkeydown=function(e){
+      if(e.key==='Enter') $('loginGo').click();
+    };
+    return;
+  }
+
+  if(ui.unlocking){
+    $('pinCancel').onclick=function(){ ui.unlocking=false; ui.pinMsg=''; render(); };
+    $('pinGo').onclick=function(){
+      if($('pinIn').value.trim()===String(data.settings.pin)){
+        data.settings.role='teacher';
+        ui.unlocking=false; ui.pinMsg='';
+        saveData(); render();
+      }else{
+        ui.pinMsg='Wrong PIN.';
+        render();
+      }
+    };
+    $('pinIn').onkeydown=function(e){ if(e.key==='Enter') $('pinGo').click(); };
+    return;
+  }
+
+  var go=document.querySelector('[data-go]');
+  if(go) go.onclick=function(){ ui.tab='students'; render(); };
+
+  if(ui.tab==='mark' && data.students.length){
+    if($('classIn')) $('classIn').onchange=function(e){
+      ui.className=e.target.value;
+      var divs=allDivisions();
+      if(divs.indexOf(ui.division)===-1) ui.division=divs[0];
+      loadMarks(); render();
+    };
+    if($('addClass')) $('addClass').onclick=function(){ ui.addingClass=true; render(); };
+    if($('cancelClass')) $('cancelClass').onclick=function(){ ui.addingClass=false; render(); };
+    if($('saveClass')) $('saveClass').onclick=function(){
+      var v=$('newClass').value.trim();
+      if(v){
+        if(data.classes.indexOf(v)===-1) data.classes.push(v);
+        ui.className=v; saveData();
+      }
+      ui.addingClass=false; render();
+    };
+    if($('newClass')) $('newClass').onkeydown=function(e){ if(e.key==='Enter') $('saveClass').click(); };
+
+    $('dateIn').onchange=function(e){ ui.date=e.target.value; loadMarks(); render(); };
+    $('divIn').onchange=function(e){ ui.division=e.target.value; loadMarks(); render(); };
+    $('batchIn').onchange=function(e){ ui.batch=e.target.value; loadMarks(); render(); };
+    $('slotIn').onchange=function(e){ ui.slot=e.target.value; loadMarks(); render(); };
+    $('subjIn').onchange=function(e){ ui.subject=e.target.value; };
+    $('teachIn').onchange=function(e){ ui.teacher=e.target.value; };
+
+    $('addSubj').onclick=function(){ ui.addingSubject=true; render(); };
+    if($('cancelSubj')) $('cancelSubj').onclick=function(){ ui.addingSubject=false; render(); };
+    if($('saveSubj')) $('saveSubj').onclick=function(){
+      var v=$('newSubj').value.trim();
+      if(v){
+        if(data.subjects.indexOf(v)===-1) data.subjects.push(v);
+        ui.subject=v; saveData();
+      }
+      ui.addingSubject=false; render();
+    };
+    if($('newSubj')) $('newSubj').onkeydown=function(e){ if(e.key==='Enter') $('saveSubj').click(); };
+
+    $('addTeach').onclick=function(){ ui.addingTeacher=true; render(); };
+    if($('cancelTeach')) $('cancelTeach').onclick=function(){ ui.addingTeacher=false; render(); };
+    if($('saveTeach')) $('saveTeach').onclick=function(){
+      var v=$('newTeach').value.trim();
+      if(v){
+        if(data.teachers.indexOf(v)===-1) data.teachers.push(v);
+        ui.teacher=v; saveData();
+      }
+      ui.addingTeacher=false; render();
+    };
+    if($('newTeach')) $('newTeach').onkeydown=function(e){ if(e.key==='Enter') $('saveTeach').click(); };
+    $('q').oninput=function(e){ ui.query=e.target.value; $('list').innerHTML=markRows(); };
+    $('allP').onclick=function(){
+      scopeStudents().forEach(function(s){ ui.marks[s.id]='present'; });
+      $('list').innerHTML=markRows(); refreshPills();
+    };
+    $('list').onclick=function(e){
+      var b=e.target.closest('[data-set]'); if(!b) return;
+      var row=b.closest('[data-id]');
+      ui.marks[row.dataset.id]=b.dataset.set;
+      row.querySelectorAll('.mk').forEach(function(x){
+        x.className='mk'+(x.dataset.set===b.dataset.set?(x.dataset.set==='present'?' on-p':' on-a'):'');
+      });
+      refreshPills();
+    };
+    $('gen').onclick=generateSession;
+  }
+
+  if(ui.tab==='sheet' && currentSession()){
+    var rec=currentSession();
+    $('print').onclick=function(){ window.print(); };
+    $('csv').onclick=function(){ downloadSessionCSV(rec); };
+    $('shareImg').onclick=function(){
+      shareCanvas(sessionImage(rec), sessionImageName(rec),
+        'Attendance '+shortDate(rec.date)+' '+sessionLabel(rec));
+    };
+    $('saveImg').onclick=function(){
+      downloadCanvas(sessionImage(rec), sessionImageName(rec));
+    };
+    $('editDay').onclick=function(){
+      ui.date=rec.date; ui.division=rec.division; ui.batch=rec.batch;
+      ui.slot=rec.slot; ui.subject=rec.subject||''; ui.teacher=rec.teacher||'';
+      loadMarks(); ui.tab='mark'; render();
+    };
+    /* onclick, not addEventListener - re-render must replace, not stack. */
+    $('main').onclick=function(e){
+      var w=e.target.closest('[data-wa]');
+      if(w){ sendWA(w.dataset.wa, rec, false); setTimeout(render,400); return; }
+      var l=e.target.closest('[data-left]');
+      if(l){ sendWA(l.dataset.left, rec, true); setTimeout(render,400); }
+    };
+    if($('tglTpl')) $('tglTpl').onclick=function(){ ui.showTpl=!ui.showTpl; render(); };
+    if($('tplSave')) $('tplSave').onclick=function(){
+      data.settings.template=$('tpl').value||DEFAULT_TEMPLATE;
+      ui.showTpl=false; saveData(); render();
+    };
+    if($('tplReset')) $('tplReset').onclick=function(){
+      data.settings.template=DEFAULT_TEMPLATE; saveData(); render();
+    };
+    if($('tglLeftTpl')) $('tglLeftTpl').onclick=function(){ ui.showLeftTpl=!ui.showLeftTpl; render(); };
+    if($('ltplSave')) $('ltplSave').onclick=function(){
+      data.settings.leftTemplate=$('ltpl').value||DEFAULT_LEFT_TEMPLATE;
+      ui.showLeftTpl=false; saveData(); render();
+    };
+    if($('ltplReset')) $('ltplReset').onclick=function(){
+      data.settings.leftTemplate=DEFAULT_LEFT_TEMPLATE; saveData(); render();
+    };
+  }
+
+  if(ui.tab==='daily'){
+    $('dayIn').onchange=function(e){ ui.dayDate=e.target.value; render(); };
+    $('main').onclick=function(e){
+      var row=e.target.closest('[data-open]'); if(!row) return;
+      ui.viewKey=row.dataset.open; ui.tab='sheet'; render();
+    };
+  }
+
+  if(ui.tab==='month'){
+    $('monthIn').onchange=function(e){ ui.month=e.target.value; render(); };
+    $('mDiv').onchange=function(e){ ui.division=e.target.value; render(); };
+    if($('vSess')) $('vSess').onclick=function(){ ui.monthView='session'; render(); };
+    if($('vDay')) $('vDay').onclick=function(){ ui.monthView='day'; render(); };
+    if($('mPrint')) $('mPrint').onclick=function(){ window.print(); };
+    if($('mCsv')) $('mCsv').onclick=function(){ downloadMonthCSV(ui.month, ui.division); };
+    var mName='attendance-'+ui.month+'-div'+ui.division+
+              (ui.monthView==='day'?'-daywise':'-sessionwise')+'.png';
+    if($('mShareImg')) $('mShareImg').onclick=function(){
+      var c=monthImage(ui.month, ui.division, ui.monthView==='day');
+      if(c) shareCanvas(c, mName, monthName(ui.month)+' attendance');
+    };
+    if($('mSaveImg')) $('mSaveImg').onclick=function(){
+      var c=monthImage(ui.month, ui.division, ui.monthView==='day');
+      if(c) downloadCanvas(c, mName);
+    };
+    if($('thIn')) $('thIn').onchange=function(e){
+      data.settings.threshold=Math.min(100,Math.max(1,Number(e.target.value)||75));
+      saveData(); render();
+    };
+  }
+
+  if(ui.tab==='students'){
+    $('college').onblur=function(e){ data.classInfo.collegeName=e.target.value.trim(); saveData(); renderHeader(); };
+    $('klass').onblur=function(e){ data.classInfo.className=e.target.value.trim(); saveData(); renderHeader(); };
+
+    $('add').onclick=function(){
+      var n=$('nName').value.trim(); if(!n) return;
+      if(!ui.className){ alert('Pick or add a class first.'); return; }
+      data.students.push({
+        id:genId(), rollNo:$('nRoll').value.trim(), name:n,
+        phone:$('nPhone').value.trim(), className:ui.className,
+        division:$('nDiv').value, batch:$('nBatch').value
+      });
+      $('nRoll').value=''; $('nName').value=''; $('nPhone').value='';
+      saveData(); pushRosterQuiet(); $('sList').innerHTML=studentRows(); $('nRoll').focus();
+    };
+    $('nName').onkeydown=function(e){ if(e.key==='Enter') $('nPhone').focus(); };
+    $('nPhone').onkeydown=function(e){ if(e.key==='Enter') $('add').click(); };
+
+    $('tglBulk').onclick=function(){ ui.showBulk=!ui.showBulk; render(); };
+    if($('bulkAdd')) $('bulkAdd').onclick=function(){
+      if(!ui.className){ alert('Pick or add a class first.'); return; }
+      var added=0, updated=0;
+      var defDiv=$('nDiv').value, defBatch=$('nBatch').value;
+      $('bulk').value.split('\n').map(function(l){ return l.trim(); }).filter(Boolean).forEach(function(line){
+        var roll='',name='',phone='',div='',batch='';
+        if(line.indexOf(',')>-1){
+          var p=line.split(',');
+          roll=(p[0]||'').trim(); name=(p[1]||'').trim();
+          phone=(p[2]||'').trim(); div=(p[3]||'').trim(); batch=(p[4]||'').trim();
+          if(!name){ name=roll; roll=''; }
+        }else{
+          var mm=line.match(/^(\d[\w\-\/]*)\s+(.+)$/);
+          if(mm){ roll=mm[1]; name=mm[2]; } else { name=line; }
+        }
+        if(!name) return;
+        if(/roll/i.test(roll) && /name/i.test(name)) return; // header row
+        div=div||defDiv; batch=batch||defBatch;
+
+        var ex=findByRoll(roll,div,ui.className);
+        if(ex){
+          if(name) ex.name=name;
+          if(phone) ex.phone=phone;
+          ex.division=div; ex.batch=batch;
+          updated++;
+        }else{
+          data.students.push({ id:genId(), rollNo:roll, name:name,
+            phone:phone, className:ui.className, division:div, batch:batch });
+          added++;
+        }
+      });
+      ui.showBulk=false; saveData(); pushRosterQuiet(); render();
+      if(added||updated) alert('Imported.\n\nNew: '+added+'\nUpdated: '+updated);
+    };
+
+    $('splitBtn').onclick=function(){
+      var list=byRoll(classStudents().filter(function(s){ return s.division===ui.division; }));
+      if(!list.length){ alert('No students in '+(ui.className||'this class')+' Div '+ui.division+'.'); return; }
+      var half=Math.ceil(list.length/2);
+      list.forEach(function(s,i){ s.batch = i<half ? '1' : '2'; });
+      saveData(); pushRosterQuiet(); render();
+      alert('Div '+ui.division+' split.\n\nBatch 1: '+half+'\nBatch 2: '+(list.length-half));
+    };
+
+    $('sq').oninput=function(e){ ui.sQuery=e.target.value; $('sList').innerHTML=studentRows(); };
+
+    $('main').onclick=function(e){
+      var ask=e.target.closest('[data-ask]');
+      if(ask){
+        ui.confirmSubj=null; ui.confirmTeach=null; ui.confirmClass=null;
+        if(ask.dataset.ask==='subj') ui.confirmSubj=ask.dataset.val;
+        else if(ask.dataset.ask==='class') ui.confirmClass=ask.dataset.val;
+        else ui.confirmTeach=ask.dataset.val;
+        render(); return;
+      }
+      var du=e.target.closest('[data-deluser]');
+      if(du){
+        var uid=du.dataset.deluser, target=null;
+        data.users.forEach(function(x){ if(x.id===uid) target=x; });
+        if(target && confirm('Remove '+target.name+'?')){
+          data.users=data.users.filter(function(x){ return x.id!==uid; });
+          if(ui.userId===uid) ui.userId=null;
+          saveData(); render();
+        }
+        return;
+      }
+
+      var no=e.target.closest('[data-rmno]');
+      if(no){ ui.confirmSubj=null; ui.confirmTeach=null; ui.confirmClass=null; render(); return; }
+
+      var rm=e.target.closest('[data-rm]');
+      if(rm){
+        var val=rm.dataset.val;
+        if(rm.dataset.rm==='class'){
+          /* A class owns its students and sessions, so removing it removes
+             them too. Everything else on this screen only unlists a name. */
+          var nStud=classStudents(val).length;
+          var nSess=Object.keys(data.sessions).filter(function(k){
+            return String(data.sessions[k].className||'')===val; }).length;
+          if(confirm('Remove '+val+'?\n\nThis deletes '+nStud+' students and '+
+                     nSess+' sessions. Save a backup first if unsure.')){
+            data.students=data.students.filter(function(x){ return String(x.className||'')!==val; });
+            Object.keys(data.sessions).forEach(function(k){
+              if(String(data.sessions[k].className||'')===val) delete data.sessions[k];
+            });
+            data.classes=data.classes.filter(function(x){ return x!==val; });
+            if(ui.className===val) ui.className=allClasses()[0]||'';
+          }
+          ui.confirmClass=null; saveData(); render(); return;
+        }
+        if(rm.dataset.rm==='subj'){
+          data.subjects=data.subjects.filter(function(x){ return x!==val; });
+          if(ui.subject===val) ui.subject='';
+          ui.confirmSubj=null;
+        }else{
+          data.teachers=data.teachers.filter(function(x){ return x!==val; });
+          if(ui.teacher===val) ui.teacher='';
+          if(data.settings.teacherName===val) data.settings.teacherName='';
+          ui.confirmTeach=null;
+        }
+        /* Past sessions keep the name they were saved with - removing
+           someone from the list is not the same as erasing their history. */
+        saveData(); render(); return;
+      }
+    };
+
+    $('sList').onclick=function(e){
+      var b=e.target.closest('[data-act]'); if(!b) return;
+      var row=b.closest('[data-id]'), id=row.dataset.id, act=b.dataset.act;
+      if(act==='edit'){ ui.editingId=id; ui.confirmId=null; }
+      else if(act==='cancelEdit'){ ui.editingId=null; }
+      else if(act==='saveEdit'){
+        var s=findStudent(id);
+        if(s){
+          s.rollNo=row.querySelector('.eRoll').value.trim();
+          s.name=row.querySelector('.eName').value.trim()||s.name;
+          s.phone=row.querySelector('.ePhone').value.trim();
+          s.division=row.querySelector('.eDiv').value;
+          s.batch=row.querySelector('.eBatch').value;
+        }
+        ui.editingId=null; saveData(); pushRosterQuiet();
+      }
+      else if(act==='del'){ ui.confirmId=id; ui.editingId=null; }
+      else if(act==='noDel'){ ui.confirmId=null; }
+      else if(act==='doDel'){
+        data.students=data.students.filter(function(x){ return x.id!==id; });
+        ui.confirmId=null; saveData(); pushRosterQuiet();
+      }
+      $('sList').innerHTML=studentRows();
+    };
+
+    $('fbUrl').onblur=function(e){ data.settings.fbUrl=e.target.value.trim(); saveData(); };
+    $('classCode').onblur=function(e){ data.settings.classCode=e.target.value.trim(); saveData(); };
+    $('testBtn').onclick=testConnection;
+    $('upBtn').onclick=syncUp;
+    $('downBtn').onclick=syncDown;
+
+    $('addClassBtn').onclick=function(){
+      var v=$('addClassIn').value.trim();
+      if(v && data.classes.indexOf(v)===-1){ data.classes.push(v); }
+      if(v) ui.className=v;
+      $('addClassIn').value=''; saveData(); render();
+    };
+    $('addClassIn').onkeydown=function(e){ if(e.key==='Enter') $('addClassBtn').click(); };
+    $('activeClass').onchange=function(e){
+      ui.className=e.target.value;
+      var divs=allDivisions();
+      if(divs.indexOf(ui.division)===-1) ui.division=divs[0];
+      loadMarks(); render();
+    };
+
+    if($('uAdd')) $('uAdd').onclick=function(){
+      var name=$('uName').value.trim();
+      var pin=$('uPin').value.replace(/\D/g,'').slice(0,6);
+      var role=$('uRole').value;
+      var cls=$('uClass').value;
+
+      if(!name){ alert('Enter a name.'); return; }
+      if(pin.length<4){ alert('PIN must be at least 4 digits.'); return; }
+      if(role==='cr' && !cls){ alert('A CR must be assigned to one class.'); return; }
+
+      var first = !loginsOn();
+      data.users.push({
+        id:'u_'+Date.now().toString(36)+Math.random().toString(36).slice(2,5),
+        name:name, pin:pin, role:role,
+        classes: (role==='owner' || !cls) ? [] : [cls]
+      });
+      /* Signing the creator in immediately avoids being locked out of the
+         app the instant the first login is created. */
+      if(first){
+        var me=data.users[data.users.length-1];
+        if(me.role==='owner') ui.userId=me.id;
+      }
+      $('uName').value=''; $('uPin').value='';
+      saveData(); render();
+      if(first) alert('Logins are on. The app will ask who is using it from now on.');
+    };
+
+    $('addSubjBtn').onclick=function(){
+      var v=$('addSubjIn').value.trim();
+      if(v && data.subjects.indexOf(v)===-1){ data.subjects.push(v); saveData(); }
+      $('addSubjIn').value=''; render();
+    };
+    $('addSubjIn').onkeydown=function(e){ if(e.key==='Enter') $('addSubjBtn').click(); };
+
+    $('addTeachBtn').onclick=function(){
+      var v=$('addTeachIn').value.trim();
+      if(v && data.teachers.indexOf(v)===-1){ data.teachers.push(v); saveData(); }
+      $('addTeachIn').value=''; render();
+    };
+    $('addTeachIn').onkeydown=function(e){ if(e.key==='Enter') $('addTeachBtn').click(); };
+
+    $('expBtn').onclick=exportBackup;
+    $('impBtn').onclick=function(){ $('impFile').click(); };
+    $('impFile').onchange=importBackup;
+
+    $('tglPaste').onclick=function(){ ui.showPaste=!ui.showPaste; render(); };
+
+    if($('copyOut')) $('copyOut').onclick=function(){
+      var txt=JSON.stringify(data);
+      var done=function(){
+        $('pasteMsg').textContent='Copied. Send it to the other device, '+
+          'open this same box there and paste it in.';
+        $('pasteMsg').style.color='var(--present)';
+      };
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(txt).then(done).catch(function(){ legacyCopy(txt,done); });
+      }else{ legacyCopy(txt,done); }
+    };
+
+    if($('pasteGo')) $('pasteGo').onclick=function(){
+      var raw=$('pasteIn').value.trim();
+      if(!raw){ return; }
+      try{
+        var p=JSON.parse(raw);
+        if(!p || !Array.isArray(p.students)) throw new Error('not an attendance backup');
+        applyImported(p);
+        $('pasteMsg').textContent='Restored '+data.students.length+' students and '+
+          Object.keys(data.sessions).length+' sessions.';
+        $('pasteMsg').style.color='var(--present)';
+        ui.showPaste=false;
+        render();
+      }catch(err){
+        $('pasteMsg').textContent='That text could not be read. Copy the whole thing, '+
+          'from the first { to the last }.';
+        $('pasteMsg').style.color='var(--absent)';
+      }
+    };
+  }
+}
+
+/* ================= IMAGE EXPORT =================
+   Drawn directly on a canvas rather than screenshotting the DOM, so it
+   needs no library, works with no internet, and looks the same on every
+   phone. Two columns once the list is long, like a paper register.
+   =============================================== */
+
+var IMG = {
+  ink:'#1E2A44', paper:'#FBFAF7', line:'#DCE2EA', muted:'#8A97A8',
+  body:'#26313F', present:'#1F7A5C', absent:'#B23A3A', margin:'#E3B3AC'
+};
+var F_DISPLAY = 'Georgia, "Times New Roman", serif';
+var F_BODY = 'Helvetica, Arial, sans-serif';
+
+function clip(ctx, text, max){
+  if(ctx.measureText(text).width <= max) return text;
+  var t=text;
+  while(t.length>1 && ctx.measureText(t+'\u2026').width > max) t=t.slice(0,-1);
+  return t+'\u2026';
+}
+function tick(ctx,x,y,col){
+  ctx.strokeStyle=col; ctx.lineWidth=2.4; ctx.lineCap='round'; ctx.beginPath();
+  ctx.moveTo(x,y+1); ctx.lineTo(x+4.5,y+5.5); ctx.lineTo(x+12,y-4.5); ctx.stroke();
+}
+function cross(ctx,x,y,col){
+  ctx.strokeStyle=col; ctx.lineWidth=2.4; ctx.lineCap='round'; ctx.beginPath();
+  ctx.moveTo(x,y-4); ctx.lineTo(x+9,y+5); ctx.moveTo(x+9,y-4); ctx.lineTo(x,y+5); ctx.stroke();
+}
+
+/** Shared header band. Returns the y to carry on from. */
+function drawHead(ctx, W, title, sub, kicker, meta){
+  ctx.fillStyle=IMG.ink; ctx.fillRect(0,0,W,84);
+  ctx.textAlign='center';
+  ctx.fillStyle='#FFFFFF'; ctx.font='bold 27px '+F_DISPLAY;
+  ctx.fillText(clip(ctx,title||'Attendance',W-80), W/2, 40);
+  if(sub){
+    ctx.fillStyle='#C3CCDA'; ctx.font='15px '+F_BODY;
+    ctx.fillText(clip(ctx,sub,W-80), W/2, 64);
+  }
+
+  var y=124;
+  ctx.fillStyle=IMG.muted; ctx.font='11px '+F_BODY;
+  ctx.fillText(kicker.toUpperCase().split('').join(' '), W/2, y);
+  y+=30;
+  ctx.fillStyle=IMG.body; ctx.font='21px '+F_DISPLAY;
+  ctx.fillText(meta.date, W/2, y);
+  if(meta.line2){
+    y+=23; ctx.fillStyle='#5A6878'; ctx.font='14px '+F_BODY;
+    ctx.fillText(clip(ctx,meta.line2,W-80), W/2, y);
+  }
+  if(meta.line3){
+    y+=20; ctx.fillStyle=IMG.muted; ctx.font='13px '+F_BODY;
+    ctx.fillText(clip(ctx,meta.line3,W-80), W/2, y);
+  }
+  return y+26;
+}
+
+function drawFooter(ctx, W, H, left, pct, note){
+  var by = H-118;
+  ctx.strokeStyle=IMG.line; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(44,by); ctx.lineTo(W-44,by); ctx.stroke();
+
+  ctx.textAlign='left'; ctx.font='14px '+F_BODY;
+  var ly=by+26;
+  left.forEach(function(l){
+    ctx.fillStyle=l.color||'#5A6878';
+    ctx.fillText(l.text, 46, ly); ly+=21;
+  });
+
+  if(pct!==null && pct!==undefined){
+    var cx=W-96, cy=by+44, rr=36;
+    var col = pct<75 ? IMG.absent : IMG.present;
+    ctx.strokeStyle=col; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.arc(cx,cy,rr,0,Math.PI*2); ctx.stroke();
+    ctx.fillStyle=col; ctx.font='bold 24px '+F_DISPLAY; ctx.textAlign='center';
+    ctx.fillText(pct+'%', cx, cy+8);
+  }
+
+  ctx.textAlign='left'; ctx.fillStyle=IMG.muted; ctx.font='12px '+F_BODY;
+  ctx.fillText('Signature: __________________', 46, H-30);
+  ctx.textAlign='right';
+  ctx.fillText(note, W-46, H-30);
+}
+
+/** One session as an image. */
+function sessionImage(r){
+  var n=r.entries.length;
+  var twoCol = n>26;
+  var perCol = twoCol ? Math.ceil(n/2) : n;
+  var W = twoCol ? 1120 : 720;
+  var rowH = 34, headTop = 236, tableHead = 26;
+  var H = headTop + tableHead + perCol*rowH + 150;
+
+  var S=2;
+  var c=document.createElement('canvas');
+  c.width=W*S; c.height=H*S;
+  var ctx=c.getContext('2d');
+  ctx.scale(S,S);
+  ctx.textBaseline='alphabetic';
+
+  ctx.fillStyle=IMG.paper; ctx.fillRect(0,0,W,H);
+
+  var y = drawHead(ctx, W, r.collegeName||'Attendance Sheet', r.className,
+    'Attendance sheet',
+    { date: longDate(r.date),
+      line2: sessionLabel(r),
+      line3: r.teacher ? 'Conducted by '+r.teacher : '' });
+
+  y = headTop;
+  var colW = twoCol ? (W-88-40)/2 : W-88;
+
+  for(var col=0; col<(twoCol?2:1); col++){
+    var x0 = 44 + col*(colW+40);
+    var slice = r.entries.slice(col*perCol, (col+1)*perCol);
+
+    ctx.strokeStyle=IMG.margin; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x0+40, y-14); ctx.lineTo(x0+40, y+tableHead+slice.length*rowH);
+    ctx.stroke();
+
+    ctx.textAlign='left'; ctx.fillStyle=IMG.muted; ctx.font='10px '+F_BODY;
+    ctx.fillText('ROLL', x0, y);
+    ctx.fillText('NAME', x0+56, y);
+    ctx.textAlign='right'; ctx.fillText('STATUS', x0+colW, y);
+
+    slice.forEach(function(e,i){
+      var ry = y + tableHead + i*rowH;
+      if(i%2===0){ ctx.fillStyle='#F4F2EE'; ctx.fillRect(x0-8, ry-16, colW+16, rowH); }
+
+      ctx.textAlign='left';
+      ctx.fillStyle='#7A8797'; ctx.font='12px '+F_BODY;
+      ctx.fillText(String(e.rollNo||''), x0, ry+4);
+
+      ctx.fillStyle=IMG.body; ctx.font='15px '+F_DISPLAY;
+      ctx.fillText(clip(ctx, e.name||'', colW-170), x0+56, ry+5);
+
+      var on = e.status==='present';
+      var col2 = on?IMG.present:IMG.absent;
+      ctx.textAlign='right'; ctx.font='12px '+F_BODY; ctx.fillStyle=col2;
+      ctx.fillText(on?'Present':'Absent', x0+colW, ry+4);
+      if(on) tick(ctx, x0+colW-70, ry, col2); else cross(ctx, x0+colW-66, ry, col2);
+    });
+  }
+
+  var pct = r.total?Math.round(r.present/r.total*100):0;
+  drawFooter(ctx, W, H, [
+    {text:'Total students: '+r.total},
+    {text:'Present: '+r.present, color:IMG.present},
+    {text:'Absent: '+r.absent, color:IMG.absent}
+  ], pct, new Date(r.savedAt).toLocaleString('en-IN'));
+
+  return c;
+}
+
+/** Monthly report as an image, in whichever view is on screen. */
+function monthImage(ym, division, byDay){
+  var st=monthStats(ym,division);
+  var ds=dayStats(ym,division);
+  var th=Number(data.settings.threshold)||75;
+  var list = byDay ? ds.list : st.list;
+  if(!list.length) return null;
+
+  var n=list.length;
+  var twoCol = n>26;
+  var perCol = twoCol ? Math.ceil(n/2) : n;
+  var W = twoCol ? 1180 : 760;
+  var rowH=34, headTop=246, tableHead=26;
+  var H = headTop + tableHead + perCol*rowH + 150;
+
+  var S=2;
+  var c=document.createElement('canvas');
+  c.width=W*S; c.height=H*S;
+  var ctx=c.getContext('2d');
+  ctx.scale(S,S);
+  ctx.fillStyle=IMG.paper; ctx.fillRect(0,0,W,H);
+
+  drawHead(ctx, W, data.classInfo.collegeName||'Attendance',
+    (ui.className||'')+(division?' \u00B7 Division '+division:''),
+    'Monthly attendance \u00B7 '+(byDay?'day-wise':'session-wise'),
+    { date: monthName(ym),
+      line2: st.sessions.length+' sessions across '+ds.days.length+' working days',
+      line3: byDay ? 'P = full day \u00B7 H = part of the day \u00B7 A = absent'
+                   : 'Minimum required '+th+'%' });
+
+  var y=headTop;
+  var colW = twoCol ? (W-88-40)/2 : W-88;
+  var totLow=0;
+
+  for(var col=0; col<(twoCol?2:1); col++){
+    var x0 = 44 + col*(colW+40);
+    var slice = list.slice(col*perCol, (col+1)*perCol);
+
+    ctx.textAlign='left'; ctx.fillStyle=IMG.muted; ctx.font='10px '+F_BODY;
+    ctx.fillText('ROLL', x0, y);
+    ctx.fillText('NAME', x0+56, y);
+    ctx.textAlign='right';
+    ctx.fillText(byDay?'P / H / A':'PRESENT', x0+colW-72, y);
+    ctx.fillText('%', x0+colW, y);
+
+    slice.forEach(function(s,i){
+      var pct = byDay ? s.dayPercent : (s.held?Math.round(s.present/s.held*100):0);
+      var low = pct<th;
+      if(low && col===0) totLow++;
+      var ry = y + tableHead + i*rowH;
+      if(i%2===0){ ctx.fillStyle='#F4F2EE'; ctx.fillRect(x0-8, ry-16, colW+16, rowH); }
+
+      ctx.textAlign='left';
+      ctx.fillStyle='#7A8797'; ctx.font='12px '+F_BODY;
+      ctx.fillText(String(s.rollNo||''), x0, ry+4);
+      ctx.fillStyle=IMG.body; ctx.font='15px '+F_DISPLAY;
+      ctx.fillText(clip(ctx, s.name||'', colW-200), x0+56, ry+5);
+
+      ctx.textAlign='right'; ctx.font='12px '+F_BODY; ctx.fillStyle='#7A8797';
+      ctx.fillText(byDay ? (s.full+' / '+s.partial+' / '+s.absentDays)
+                         : (s.present+'/'+s.held), x0+colW-72, ry+4);
+
+      ctx.font='bold 14px '+F_BODY;
+      ctx.fillStyle = low?IMG.absent:IMG.present;
+      ctx.fillText(pct+'%', x0+colW, ry+4);
+    });
+  }
+
+  var below = list.filter(function(s){
+    var p = byDay ? s.dayPercent : (s.held?Math.round(s.present/s.held*100):0);
+    return p<th;
+  }).length;
+  var totH=0, totP=0;
+  st.list.forEach(function(s){ totH+=s.held; totP+=s.present; });
+  var avg = totH?Math.round(totP/totH*100):0;
+
+  drawFooter(ctx, W, H, [
+    {text:'Students: '+list.length},
+    {text:'Class average: '+avg+'%', color:IMG.present},
+    {text:'Below '+th+'%: '+below, color: below?IMG.absent:'#5A6878'}
+  ], avg, monthName(ym));
+
+  return c;
+}
+
+/* ---- saving and sharing ---- */
+
+function canvasBlob(c){
+  return new Promise(function(res,rej){
+    if(c.toBlob) c.toBlob(function(b){ b?res(b):rej(new Error('blob failed')); }, 'image/png');
+    else rej(new Error('unsupported'));
+  });
+}
+
+function downloadCanvas(c, filename){
+  if(NATIVE){
+    try{
+      AndroidBridge.saveBase64(c.toDataURL('image/png').split(',')[1], filename, 'image/png');
+      return;
+    }catch(e){}
+  }
+  canvasBlob(c).then(function(b){
+    var url=URL.createObjectURL(b);
+    var a=document.createElement('a');
+    a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); },1500);
+  }).catch(function(){
+    // Some older browsers block toBlob; open the image so it can be long-pressed.
+    try{ window.open(c.toDataURL('image/png'),'_blank'); }catch(e){}
+  });
+}
+
+/* Tries the native share sheet first, which on Android puts WhatsApp one
+   tap away. Falls back to a plain download everywhere else. */
+function shareCanvas(c, filename, title){
+  if(NATIVE){
+    try{
+      AndroidBridge.shareBase64(c.toDataURL('image/png').split(',')[1],
+                                filename, 'image/png', title||'Attendance');
+      return;
+    }catch(e){}
+  }
+  canvasBlob(c).then(function(b){
+    var file;
+    try{ file = new File([b], filename, {type:'image/png'}); }catch(e){ file=null; }
+    if(file && navigator.canShare && navigator.canShare({files:[file]})){
+      navigator.share({ files:[file], title:title })
+        .catch(function(){ downloadCanvas(c, filename); });
+    }else{
+      downloadCanvas(c, filename);
+    }
+  }).catch(function(){ downloadCanvas(c, filename); });
+}
+
+function sessionImageName(r){
+  return 'attendance-'+r.date+'-div'+r.division+'-'+
+         (r.batch==='All'?'full':'b'+r.batch)+'-'+r.slot.toLowerCase()+'.png';
+}
+
+/* ================= actions ================= */
+function generateSession(){
+  var list=scopeStudents();
+  if(!list.length){ alert('No students in this division/batch.'); return; }
+
+  var entries=byRoll(list).map(function(s){
+    return { id:s.id, rollNo:s.rollNo, name:s.name, status:statusOf(s.id) };
+  });
+  var present=entries.filter(function(e){ return e.status==='present'; }).length;
+  var key=currentKey();
+  var prev=data.sessions[key];
+
+  data.sessions[key]={
+    key:key, date:ui.date, division:ui.division, batch:ui.batch, slot:ui.slot,
+    subject:ui.subject||'', teacher:ui.teacher||'',
+    collegeName:data.classInfo.collegeName, className:ui.className,
+    entries:entries, total:entries.length, present:present, absent:entries.length-present,
+    notified: prev&&prev.notified?prev.notified:[],
+    leftNotified: prev&&prev.leftNotified?prev.leftNotified:[],
+    savedAt:new Date().toISOString()
+  };
+
+  // Remember the teacher so the next session pre-fills it.
+  data.settings.teacherName = ui.teacher || '';
+
+  ui.viewKey=key; ui.dayDate=ui.date; ui.tab='sheet';
+  saveData(); render();
+
+  /* Fire and forget. Never blocks the sheet appearing; a dead network
+     just leaves it for the next manual sync. */
+  if(fbReady() && data.settings.autoSync){
+    pushSession(key).then(function(){
+      data.settings.lastSync=new Date().toISOString(); saveData();
+    }).catch(function(){});
+  }
+}
+
+/* Inside the Android app a native bridge is injected. Use it for file
+   writes and sharing, since a WebView cannot download blob: URLs and has
+   no navigator.share. Falls straight back to the browser path on the web. */
+var NATIVE = (typeof AndroidBridge !== 'undefined' && AndroidBridge);
+
+function saveBlob(text,filename,type){
+  if(NATIVE){
+    try{ AndroidBridge.saveText(String(text), filename, type||'text/plain'); return; }
+    catch(e){}
+  }
+  var blob=new Blob([text],{type:type});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); },1000);
+}
+
+function downloadSessionCSV(r){
+  var rows=[
+    [r.collegeName||'Attendance Sheet'], [r.className||''],
+    ['Date: '+longDate(r.date)], ['Session: '+sessionLabel(r)],
+    ['Teacher: '+(r.teacher||'-')], [], ['Roll No','Name','Status']
+  ];
+  r.entries.forEach(function(e){
+    rows.push([e.rollNo,e.name,e.status==='present'?'Present':'Absent']);
+  });
+  rows.push([], ['Total',r.total], ['Present',r.present], ['Absent',r.absent],
+    ['Attendance %',(r.total?Math.round(r.present/r.total*100):0)+'%']);
+  saveBlob(rows.map(function(x){ return x.map(csvCell).join(','); }).join('\n'),
+    'attendance-'+r.date+'-div'+r.division+'-b'+r.batch+'-'+r.slot.toLowerCase()+'.csv',
+    'text/csv;charset=utf-8;');
+}
+
+function downloadMonthCSV(ym, division){
+  var st=monthStats(ym,division);
+  if(!st.sessions.length) return;
+  var ds=dayStats(ym,division);
+  var th=Number(data.settings.threshold)||75;
+
+  var rows=[
+    [data.classInfo.collegeName||'Attendance'],
+    [(ui.className||'')+' - Division '+division],
+    ['Monthly summary: '+monthName(ym)],
+    [st.sessions.length+' sessions across '+ds.days.length+' working days'],
+    []
+  ];
+
+  /* ---- Block 1: day-wise ---- */
+  rows.push(['DAY-WISE']);
+  rows.push(['P = all sessions attended, H = half day (part attended), A = absent']);
+  rows.push(['Roll No','Name','Batch']
+    .concat(ds.days.map(function(d){ return d.slice(8); }))
+    .concat(['Full','Half','Absent','Days','Day %','Status']));
+
+  ds.list.forEach(function(s){
+    var line=[s.rollNo,s.name,s.batch].concat(ds.days.map(function(d){
+      var mk=dayMark(s,d);
+      return mk==='\u00BD' ? 'H' : mk;   // Excel handles ASCII better
+    })).concat([s.full,s.partial,s.absentDays,s.heldDays,
+                s.dayPercent+'%', s.dayPercent<th?'SHORT':'OK']);
+    rows.push(line);
+  });
+
+  rows.push([], []);
+
+  /* ---- Block 2: session-wise ---- */
+  var cols=st.sessions.slice().sort(function(a,b){
+    if(a.date!==b.date) return a.date<b.date?-1:1;
+    return SLOTS.indexOf(a.slot)-SLOTS.indexOf(b.slot);
+  });
+
+  rows.push(['SESSION-WISE']);
+  rows.push(['','','']
+    .concat(cols.map(function(c){ return c.date.slice(8); }))
+    .concat(['','','','']));
+  rows.push(['Roll No','Name','Batch']
+    .concat(cols.map(function(c){
+      return (c.batch==='All'?'Full':'B'+c.batch)+' '+c.slot.slice(0,3)+
+             (c.subject?' '+c.subject:'');
+    }))
+    .concat(['Present','Held','%','Status']));
+
+  st.list.forEach(function(s){
+    var pct=s.held?Math.round(s.present/s.held*100):0;
+    var line=[s.rollNo,s.name,s.batch].concat(cols.map(function(c){
+      var f=null;
+      c.entries.forEach(function(e){ if(e.id===s.id) f=e; });
+      return f ? (f.status==='present'?'P':'A') : '-';
+    })).concat([s.present,s.held,pct+'%',pct<th?'SHORT':'OK']);
+    rows.push(line);
+  });
+
+  rows.push([], ['Working days',ds.days.length], ['Sessions',cols.length],
+    ['Minimum required',th+'%']);
+
+  saveBlob(rows.map(function(x){ return x.map(csvCell).join(','); }).join('\n'),
+    'attendance-'+ym+'-div'+division+'.csv','text/csv;charset=utf-8;');
+}
+
+function exportBackup(){
+  saveBlob(JSON.stringify(data,null,2),'attendance-backup-'+todayISO()+'.json','application/json');
+}
+
+/* Older WebViews have no navigator.clipboard. */
+function legacyCopy(text, done){
+  try{
+    var ta=document.createElement('textarea');
+    ta.value=text;
+    ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    done();
+  }catch(e){}
+}
+
+/* One place that applies an imported payload, used by both file and text restore. */
+function applyImported(p){
+  data.classInfo=p.classInfo||data.classInfo;
+  data.students=p.students;
+  data.sessions=p.sessions||{};
+  data.divisions=p.divisions||data.divisions;
+  data.subjects=Array.isArray(p.subjects)?p.subjects:[];
+  data.teachers=Array.isArray(p.teachers)?p.teachers:[];
+  data.settings=Object.assign({
+    template:DEFAULT_TEMPLATE, leftTemplate:DEFAULT_LEFT_TEMPLATE, threshold:75
+  }, p.settings||{});
+  if(p.days && !p.sessions) migrateDays(p.days);
+  normalise();
+  loadMarks();
+  saveData();
+}
+
+function importBackup(e){
+  var f=e.target.files[0]; if(!f) return;
+  var reader=new FileReader();
+  reader.onload=function(){
+    try{
+      var p=JSON.parse(reader.result);
+      if(!p || !Array.isArray(p.students)) throw new Error('bad');
+      applyImported(p);
+      render();
+    }catch(err){
+      alert('That file could not be read. Pick a backup saved from this app.');
+    }
+  };
+  reader.readAsText(f);
+  e.target.value='';
+}
+
+/* ================= migration ================= */
+/* Older versions stored one record per day with no division or batch.
+   Fold those into the session model so nothing is lost on upgrade. */
+function migrateDays(days){
+  Object.keys(days||{}).forEach(function(d){
+    var old=days[d];
+    if(!old || !old.entries) return;
+    var key=sessionKey(d,'A','All','Morning');
+    data.sessions[key]={
+      key:key, date:d, division:'A', batch:'All', slot:'Morning',
+      subject:'', teacher:old.teacher||'',
+      collegeName:old.collegeName||'', className:old.className||'',
+      entries:old.entries, total:old.total, present:old.present, absent:old.absent,
+      notified:old.notified||[], leftNotified:[],
+      savedAt:old.savedAt||new Date().toISOString()
+    };
+  });
+}
+function normalise(){
+  if(!Array.isArray(data.classes)) data.classes=[];
+
+  /* Everything created before classes existed belongs to one class.
+     Use whatever was in Class details, so nothing looks unassigned. */
+  var fallback = data.classInfo.className || 'My Class';
+  var needMigrate = false;
+  data.students.forEach(function(s){
+    if(s.className===undefined || s.className===null || s.className===''){
+      s.className = fallback; needMigrate = true;
+    }
+  });
+
+  Object.keys(data.sessions||{}).forEach(function(k){
+    var ss=data.sessions[k];
+    if(!ss.className) ss.className = fallback;
+    // Old keys had no class segment; rebuild them so lookups line up.
+    var proper = sessionKey(ss.className, ss.date, ss.division, ss.batch, ss.slot);
+    if(k !== proper){
+      ss.key = proper;
+      data.sessions[proper] = ss;
+      delete data.sessions[k];
+      needMigrate = true;
+    }
+  });
+
+  if(needMigrate && data.classes.indexOf(fallback)===-1) data.classes.push(fallback);
+  allClasses().forEach(function(c){
+    if(data.classes.indexOf(c)===-1) data.classes.push(c);
+  });
+
+  if(!Array.isArray(data.subjects)) data.subjects=[];
+  if(!Array.isArray(data.teachers)) data.teachers=[];
+  /* Anything already typed into a past session becomes a list entry,
+     so upgrading never loses a subject or a teacher name. */
+  Object.keys(data.sessions||{}).forEach(function(k){
+    var ss=data.sessions[k];
+    if(ss.subject && data.subjects.indexOf(ss.subject)===-1) data.subjects.push(ss.subject);
+    if(ss.teacher && data.teachers.indexOf(ss.teacher)===-1) data.teachers.push(ss.teacher);
+  });
+  if(data.settings.teacherName &&
+     data.teachers.indexOf(data.settings.teacherName)===-1){
+    data.teachers.push(data.settings.teacherName);
+  }
+  data.students.forEach(function(s){
+    if(!s.division) s.division='A';
+    if(!s.batch) s.batch='1';
+  });
+  if(!data.settings.leftTemplate) data.settings.leftTemplate=DEFAULT_LEFT_TEMPLATE;
+}
+
+function loadData(){
+  return cloudGet(KEY).then(function(raw){
+    if(!raw && localWorks()){ try{ raw=window.localStorage.getItem(KEY); }catch(e){} }
+    if(raw){
+      try{
+        var p=JSON.parse(raw);
+        if(p && typeof p==='object'){
+          data.classInfo=p.classInfo||data.classInfo;
+          data.students=Array.isArray(p.students)?p.students:[];
+          data.divisions=p.divisions||data.divisions;
+          data.classes=Array.isArray(p.classes)?p.classes:[];
+          data.users=Array.isArray(p.users)?p.users:[];
+          data.subjects=Array.isArray(p.subjects)?p.subjects:[];
+          data.teachers=Array.isArray(p.teachers)?p.teachers:[];
+          data.sessions=p.sessions||{};
+          data.settings=Object.assign(data.settings,p.settings||{});
+          if(p.days && !p.sessions) migrateDays(p.days);
+        }
+      }catch(e){}
+    }
+    normalise();
+  });
+}
+
+/* ================= boot ================= */
+document.querySelectorAll('nav button').forEach(function(b){
+  b.onclick=function(){
+    ui.tab=b.dataset.tab;
+    if(ui.tab==='sheet' && !ui.viewKey){
+      var ks=Object.keys(data.sessions);
+      if(ks.length) ui.viewKey=ks[ks.length-1];
+    }
+    render();
+  };
+});
+
+(function(){
+  var t=new URLSearchParams(location.search).get('tab');
+  if(t && ['mark','sheet','daily','month','students'].indexOf(t)>-1) ui.tab=t;
+})();
+
+(function(){
+  var lb=document.getElementById('lockBtn');
+  if(lb) lb.onclick=function(){ ui.unlocking=true; ui.pinMsg=''; render(); };
+  var ob=document.getElementById('outBtn');
+  if(ob) ob.onclick=function(){
+    ui.userId=null; ui.loginPick=null; ui.loginMsg='';
+    render();
+  };
+})();
+
+loadData().then(function(){
+  var cls=allClasses();
+  if(cls.indexOf(ui.className)===-1) ui.className = cls[0] || '';
+  var divs=allDivisions();
+  if(divs.indexOf(ui.division)===-1) ui.division=divs[0];
+  ui.teacher = data.settings.teacherName || '';
+  loadMarks();
+  return saveData();
+}).then(function(){
+  render();
+  if(fbReady()) startStream();
+});
+
+/* ================= PWA ================= */
+if('serviceWorker' in navigator){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').catch(function(){});
+  });
+}
+var deferredPrompt=null;
+var installBtn=document.getElementById('installBtn');
+window.addEventListener('beforeinstallprompt',function(e){
+  e.preventDefault(); deferredPrompt=e;
+  if(installBtn) installBtn.style.display='block';
+});
+if(installBtn){
+  installBtn.onclick=function(){
+    if(!deferredPrompt) return;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(function(){
+      deferredPrompt=null; installBtn.style.display='none';
+    });
+  };
+}
+window.addEventListener('appinstalled',function(){
+  deferredPrompt=null;
+  if(installBtn) installBtn.style.display='none';
+});
+if(navigator.storage && navigator.storage.persist){
+  navigator.storage.persisted().then(function(a){
+    if(!a) navigator.storage.persist().catch(function(){});
+  }).catch(function(){});
+}
+</script>
+</body>
+</html>

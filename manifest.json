@@ -1,0 +1,44 @@
+{
+  "name": "Attendance Register",
+  "short_name": "Attendance",
+  "description": "Daily attendance marking, printable sheets, monthly reports and parent WhatsApp alerts.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F8FAFC",
+  "theme_color": "#1E2A44",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Mark today's attendance",
+      "short_name": "Mark",
+      "url": "./index.html?tab=mark"
+    },
+    {
+      "name": "Monthly report",
+      "short_name": "Month",
+      "url": "./index.html?tab=month"
+    }
+  ]
+}
