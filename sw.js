@@ -1,16 +1,18 @@
 /**
  * Service worker for Attendance Register.
  *
- * Strategy: cache-first for the app shell, so the app opens instantly and
- * works with no internet at all. A background fetch refreshes the cache
- * when there IS a connection, so you get updates without ever being
- * blocked by a dead network in a classroom basement.
+ * Strategy: network-first for the page itself, cache-first for icons.
  *
- * IMPORTANT: bump CACHE_VERSION whenever you change index.html,
- * otherwise phones will keep serving the old cached copy.
+ * The page is served from the network when one exists, so an update on the
+ * host reaches every phone on the next open. Cache-first was wrong here:
+ * it kept serving a stale copy for a load or two after every change, which
+ * looks exactly like a broken app.
+ *
+ * Offline is unaffected. With no network the cached copy is served, so
+ * marking attendance in a dead-signal classroom still works.
  */
 
-var CACHE_VERSION = "attendance-v15";
+var CACHE_VERSION = 'attendance-v16';
 
 var SHELL = [
   './',
@@ -25,14 +27,10 @@ var SHELL = [
 self.addEventListener('install', function (event) {
   event.waitUntil(
     caches.open(CACHE_VERSION).then(function (cache) {
-      // addAll fails the whole install if any one file 404s, so add
-      // them individually and tolerate misses.
       return Promise.all(SHELL.map(function (url) {
         return cache.add(url).catch(function () { return null; });
       }));
-    }).then(function () {
-      return self.skipWaiting();
-    })
+    }).then(function () { return self.skipWaiting(); })
   );
 });
 
@@ -43,38 +41,48 @@ self.addEventListener('activate', function (event) {
         if (k !== CACHE_VERSION) return caches.delete(k);
         return null;
       }));
-    }).then(function () {
-      return self.clients.claim();
-    })
+    }).then(function () { return self.clients.claim(); })
   );
 });
 
 self.addEventListener('fetch', function (event) {
   var req = event.request;
-
-  // Only handle same-origin GETs. Never touch wa.me links or anything external.
   if (req.method !== 'GET') return;
   if (new URL(req.url).origin !== self.location.origin) return;
 
+  var isPage = req.mode === 'navigate' ||
+               (req.headers.get('accept') || '').indexOf('text/html') > -1;
+
+  if (isPage) {
+    // Network first: always try for the newest page, fall back when offline.
+    event.respondWith(
+      fetch(req).then(function (res) {
+        var copy = res.clone();
+        caches.open(CACHE_VERSION).then(function (c) { c.put(req, copy); });
+        return res;
+      }).catch(function () {
+        return caches.match(req).then(function (hit) {
+          return hit || caches.match('./index.html');
+        });
+      })
+    );
+    return;
+  }
+
+  // Icons and the manifest rarely change; serve them fast.
   event.respondWith(
     caches.match(req).then(function (cached) {
-      var network = fetch(req).then(function (res) {
+      return cached || fetch(req).then(function (res) {
         if (res && res.status === 200 && res.type === 'basic') {
           var copy = res.clone();
           caches.open(CACHE_VERSION).then(function (c) { c.put(req, copy); });
         }
         return res;
-      }).catch(function () {
-        return cached || caches.match('./index.html');
       });
-
-      // Serve cache immediately if we have it; refresh in the background.
-      return cached || network;
     })
   );
 });
 
-// Lets the page trigger an immediate update instead of waiting for a restart.
 self.addEventListener('message', function (event) {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
