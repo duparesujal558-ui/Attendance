@@ -176,7 +176,7 @@
 
 <script>
 /* ================= storage ================= */
-var APP_VERSION = '1.7';
+var APP_VERSION = '2.0';
 var KEY = 'sgAttendanceData';
 var savedTo = [];
 
@@ -1309,10 +1309,13 @@ function studentRows(){
 }
 
 /* ================= FIREBASE SYNC =================
-   Realtime Database over plain REST. No SDK, so the app stays a single
-   file and still works offline - it just syncs when a network exists.
-   Live updates arrive over EventSource, so other teachers' sessions
-   appear without anyone pressing anything.
+   Realtime Database over plain REST. No SDK, so the app stays one file and
+   still works offline; it syncs whenever a network exists.
+
+   Layout under the database:
+     /attendance/{code}/_people          logins, only if opted in
+     /attendance/{code}/{class}/roster   students, never phone numbers
+     /attendance/{code}/{class}/sessions attendance
    ================================================ */
 
 var syncState = { busy:false, stream:null, live:false };
@@ -1328,16 +1331,12 @@ function fbKey(k){ return String(k).replace(/[.$#\[\]\/|]/g,'_'); }
 
 function fbRoot(sub){
   return fbBase() + '/attendance/' +
-         fbKey(String(data.settings.classCode).trim()) + sub + '.json';
+         fbKey(String(data.settings.classCode).trim()) + (sub||'') + '.json';
 }
-/* The class name is part of the path, so two classes sharing a code
-   still land in separate branches. */
-function fbPath(sub){
-  return fbRoot('/' + fbKey(ui.className || 'default') + sub);
+/* Explicit class, so an upload is never limited to what is on screen. */
+function fbClass(cls, sub){
+  return fbRoot('/' + fbKey(cls || 'default') + (sub||''));
 }
-/* Shared setup that is not tied to one class: the class list itself,
-   subjects, teachers and logins. Sibling of the class branches. */
-function fbCfg(){ return fbRoot('/_config'); }
 
 function getJSON(url){
   return fetch(url, { cache:'no-store' }).then(function(r){
@@ -1350,27 +1349,6 @@ function getJSON(url){
 function putJSON(url, obj){
   return fetch(url, {
     method:'PUT', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify(obj)
-  }).then(function(r){
-    return r.json().then(function(j){
-      if(j && j.error) throw new Error(j.error);
-      return j;
-    });
-  });
-}
-
-function fbGet(sub){
-  return fetch(fbPath(sub), { cache:'no-store' }).then(function(r){
-    return r.json().then(function(j){
-      if(j && j.error) throw new Error(j.error);
-      return j;
-    });
-  });
-}
-function fbPut(sub, obj){
-  return fetch(fbPath(sub), {
-    method:'PUT',
-    headers:{'Content-Type':'application/json'},
     body:JSON.stringify(obj)
   }).then(function(r){
     return r.json().then(function(j){
@@ -1397,51 +1375,36 @@ function explain(err){
   if(m.indexOf('Failed to fetch')>-1 || m.indexOf('NetworkError')>-1){
     return 'Could not reach the database. Check the URL and your internet.';
   }
-  if(m.indexOf('Unexpected token')>-1){
-    return 'That URL did not return database data. Copy the URL shown at the top ' +
-           'of the Realtime Database page.';
+  if(m.indexOf('Unexpected token')>-1 || m.indexOf('JSON')>-1){
+    return 'That URL did not return database data. Copy the URL shown at the ' +
+           'top of the Realtime Database page.';
   }
   return m;
 }
 
-/* ---- pushes ---- */
+/* ---- uploads ---- */
 
-/* Phone numbers are deliberately NOT uploaded. They stay on the device
-   that entered them, so a shared database never holds parent contacts. */
-function pushRoster(){
+/* Phone numbers are deliberately absent. They stay on the device that
+   entered them, so a shared database never holds parent contacts. */
+function pushRoster(cls){
   if(!fbReady()) return Promise.resolve(null);
   var obj={};
-  classStudents().forEach(function(s){
+  classStudents(cls).forEach(function(s){
     obj[fbKey((s.division||'A')+'_'+(s.rollNo||s.id))] = {
-      rollNo:s.rollNo||'', name:s.name||'',
+      rollNo:s.rollNo||'', name:s.name||'', className:cls,
       division:s.division||'A', batch:s.batch||'1'
     };
   });
-  return fbPut('/roster', obj);
-}
-
-/* Only runs when the teacher has opted in, because this puts PINs into a
-   database that anyone holding the URL and class code can read. */
-function pushUsers(){
-  if(!fbReady() || !data.settings.sharePeople) return Promise.resolve(null);
-  var obj={};
-  (data.users||[]).forEach(function(u){
-    obj[fbKey(u.id)] = { id:u.id, name:u.name, pin:u.pin,
-                         role:u.role, classes:u.classes||[] };
-  });
-  return fbRootPut('/people', obj);
-}
-function pushUsersQuiet(){
-  if(!fbReady() || !data.settings.sharePeople) return;
-  pushUsers().catch(function(){});
+  return putJSON(fbClass(cls, '/roster'), obj);
 }
 
 function pushSession(key){
   if(!fbReady()) return Promise.resolve(null);
   var s=data.sessions[key];
   if(!s) return Promise.resolve(null);
-  return fbPut('/sessions/'+fbKey(key), {
-    date:s.date, division:s.division, batch:s.batch, slot:s.slot,
+  return putJSON(fbClass(s.className, '/sessions/'+fbKey(key)), {
+    className:s.className, date:s.date, division:s.division,
+    batch:s.batch, slot:s.slot,
     subject:s.subject||'', teacher:s.teacher||'',
     entries:s.entries.map(function(e){
       return { rollNo:e.rollNo, name:e.name, status:e.status };
@@ -1450,50 +1413,105 @@ function pushSession(key){
   });
 }
 
-function pushConfig(){
-  if(!fbReady()) return Promise.resolve(null);
-  data.configUpdatedAt = Date.now();
-  return putJSON(fbCfg(), {
-    classes: data.classes||[],
-    subjects: data.subjects||[],
-    teachers: data.teachers||[],
-    users: data.users||[],
-    collegeName: data.classInfo.collegeName||'',
-    threshold: data.settings.threshold||75,
-    updatedAt: data.configUpdatedAt
+/* Only when opted in: this puts PINs somewhere anyone with the URL and
+   class code can read them. */
+function pushUsers(){
+  if(!fbReady() || !data.settings.sharePeople) return Promise.resolve(null);
+  var obj={};
+  (data.users||[]).forEach(function(u){
+    obj[fbKey(u.id)] = { id:u.id, name:u.name, pin:u.pin,
+                         role:u.role, classes:u.classes||[] };
   });
+  return putJSON(fbRoot('/_people'), obj);
 }
-/* Config changes are small and frequent, so failures stay silent. */
-function pushConfigQuiet(){
+
+function pushRosterQuiet(){
   if(!fbReady() || !data.settings.autoSync) return;
-  pushConfig().catch(function(){});
+  allClasses().reduce(function(chain,c){
+    return chain.then(function(){ return pushRoster(c); });
+  }, Promise.resolve()).catch(function(){});
 }
-
-function mergeConfig(cfg){
-  if(!cfg || !cfg.updatedAt) return false;
-  // Whole-bundle last-write-wins, so removing a person actually propagates.
-  if(data.configUpdatedAt && data.configUpdatedAt >= cfg.updatedAt) return false;
-
-  if(Array.isArray(cfg.classes)) data.classes = cfg.classes;
-  if(Array.isArray(cfg.subjects)) data.subjects = cfg.subjects;
-  if(Array.isArray(cfg.teachers)) data.teachers = cfg.teachers;
-  if(Array.isArray(cfg.users)) data.users = cfg.users;
-  if(cfg.collegeName) data.classInfo.collegeName = cfg.collegeName;
-  if(cfg.threshold) data.settings.threshold = cfg.threshold;
-  data.configUpdatedAt = cfg.updatedAt;
-  return true;
+function pushUsersQuiet(){
+  if(!fbReady() || !data.settings.sharePeople) return;
+  pushUsers().catch(function(){});
 }
 
 /* ---- merge ---- */
 
-function mergeRemote(all, quiet){
-  var addedStudents=0, mergedSessions=0;
+/* Walks every class branch under the code, so a phone holding nothing
+   still receives all classes. */
+function mergeAll(root, quiet){
+  var classesSeen=0;
 
-  /* Additive: a person added on another phone appears here, but nothing
-     local is deleted, so a stale copy elsewhere cannot wipe your logins. */
-  if(data.settings.sharePeople && all && all.people){
-    Object.keys(all.people).forEach(function(k){
-      var ru=all.people[k];
+  Object.keys(root||{}).forEach(function(branch){
+    if(branch==='_people' || branch==='_ping') return;
+    var node=root[branch];
+    if(!node || typeof node!=='object') return;
+
+    // Prefer the stored class name; the branch key is a sanitised fallback.
+    var name=branch;
+    ['roster','sessions'].forEach(function(part){
+      Object.keys(node[part]||{}).forEach(function(k){
+        var it=node[part][k];
+        if(it && it.className) name=it.className;
+      });
+    });
+
+    if(data.classes.indexOf(name)===-1) data.classes.push(name);
+    classesSeen++;
+
+    Object.keys(node.roster||{}).forEach(function(k){
+      var rs=node.roster[k];
+      if(!rs || !rs.rollNo) return;
+      var cls=rs.className||name;
+      var ex=findByRoll(rs.rollNo, rs.division, cls);
+      if(ex){
+        if(rs.name) ex.name=rs.name;
+        if(rs.division) ex.division=rs.division;
+        if(rs.batch) ex.batch=rs.batch;
+        // phone left alone: it is local only
+      }else{
+        data.students.push({ id:genId(), rollNo:rs.rollNo, name:rs.name||'',
+          phone:'', className:cls,
+          division:rs.division||'A', batch:rs.batch||'1' });
+      }
+    });
+
+    Object.keys(node.sessions||{}).forEach(function(k){
+      var rm=node.sessions[k];
+      if(!rm || !rm.date || !rm.entries) return;
+      var cls=rm.className||name;
+      var key=sessionKey(cls, rm.date, rm.division, rm.batch, rm.slot);
+      var ex=data.sessions[key];
+      // Ours is newer, so a stale phone cannot overwrite fresher work.
+      if(ex && ex.updatedAt && rm.updatedAt && ex.updatedAt > rm.updatedAt) return;
+
+      var entries=(rm.entries||[]).map(function(re){
+        var local=findByRoll(re.rollNo, rm.division, cls);
+        return { id: local?local.id:('r_'+cls+'_'+rm.division+'_'+re.rollNo),
+                 rollNo:re.rollNo, name:re.name, status:re.status };
+      });
+      var present=entries.filter(function(e){ return e.status==='present'; }).length;
+
+      data.sessions[key]={
+        key:key, date:rm.date, division:rm.division, batch:rm.batch, slot:rm.slot,
+        subject:rm.subject||'', teacher:rm.teacher||'',
+        collegeName:data.classInfo.collegeName, className:cls,
+        entries:entries, total:entries.length, present:present,
+        absent:entries.length-present,
+        notified: ex&&ex.notified?ex.notified:[],
+        leftNotified: ex&&ex.leftNotified?ex.leftNotified:[],
+        updatedAt: rm.updatedAt||Date.now(),
+        savedAt: ex?ex.savedAt:new Date().toISOString()
+      };
+    });
+  });
+
+  /* Additive only: nothing local is deleted, so a stale copy elsewhere
+     cannot wipe your logins. */
+  if(data.settings.sharePeople && root && root._people){
+    Object.keys(root._people).forEach(function(k){
+      var ru=root._people[k];
       if(!ru || !ru.id || !ru.name) return;
       var found=null;
       (data.users||[]).forEach(function(u){ if(u.id===ru.id) found=u; });
@@ -1507,62 +1525,21 @@ function mergeRemote(all, quiet){
     });
   }
 
-  var roster=(all && all.roster) || {};
-  Object.keys(roster).forEach(function(k){
-    var rs=roster[k]; if(!rs || !rs.rollNo) return;
-    var ex=findByRoll(rs.rollNo, rs.division);
-    if(ex){
-      if(rs.name) ex.name=rs.name;
-      if(rs.division) ex.division=rs.division;
-      if(rs.batch) ex.batch=rs.batch;
-      // phone left alone on purpose - it is local only
-    }else{
-      data.students.push({ id:genId(), rollNo:rs.rollNo, name:rs.name||'',
-        phone:'', division:rs.division||'A', batch:rs.batch||'1' });
-      addedStudents++;
-    }
-  });
-
-  var sess=(all && all.sessions) || {};
-  Object.keys(sess).forEach(function(k){
-    var rm=sess[k];
-    if(!rm || !rm.date || !rm.entries) return;
-    var key=sessionKey(ui.className, rm.date, rm.division, rm.batch, rm.slot);
-    var ex=data.sessions[key];
-
-    // Ours is newer than theirs, so keep ours.
-    if(ex && ex.updatedAt && rm.updatedAt && ex.updatedAt > rm.updatedAt) return;
-
-    var entries=(rm.entries||[]).map(function(re){
-      var local=findByRoll(re.rollNo, rm.division, ui.className);
-      return { id: local?local.id:('r_'+rm.division+'_'+re.rollNo),
-               rollNo:re.rollNo, name:re.name, status:re.status };
-    });
-    var present=entries.filter(function(e){ return e.status==='present'; }).length;
-
-    data.sessions[key]={
-      key:key, date:rm.date, division:rm.division, batch:rm.batch, slot:rm.slot,
-      subject:rm.subject||'', teacher:rm.teacher||'',
-      collegeName:data.classInfo.collegeName,
-      className:ui.className,
-      entries:entries, total:entries.length, present:present,
-      absent:entries.length-present,
-      notified: ex&&ex.notified?ex.notified:[],
-      leftNotified: ex&&ex.leftNotified?ex.leftNotified:[],
-      updatedAt: rm.updatedAt||Date.now(),
-      savedAt: ex?ex.savedAt:new Date().toISOString()
-    };
-    mergedSessions++;
-  });
-
   normalise();
+  if(!ui.className){
+    var mine=myClasses();
+    ui.className = mine[0] || allClasses()[0] || '';
+    var dv=allDivisions();
+    if(dv.indexOf(ui.division)===-1) ui.division=dv[0];
+  }
   loadMarks();
   saveData();
+
   if(!quiet){
-    setSync('Synced. '+Object.keys(data.sessions).length+' sessions, '+
-            data.students.length+' students.',true);
+    setSync('Synced. '+classesSeen+' class'+(classesSeen===1?'':'es')+', '+
+            data.students.length+' students, '+
+            Object.keys(data.sessions).length+' sessions.', true);
   }
-  return { addedStudents:addedStudents, mergedSessions:mergedSessions };
 }
 
 /* Never yank the page out from under someone mid-typing. */
@@ -1572,7 +1549,7 @@ function safeRender(){
   render();
 }
 
-/* ---- live stream ---- */
+/* ---- live updates ---- */
 
 function startStream(){
   if(!fbReady() || typeof EventSource === 'undefined') return;
@@ -1580,24 +1557,14 @@ function startStream(){
   try{
     var es = new EventSource(fbRoot(''));
     syncState.stream = es;
-
     var onChange = function(){
-      // Any remote change: re-read config and this class, then merge.
-      getJSON(fbCfg()).then(function(cfg){
-        if(mergeConfig(cfg)){
-          var cls=allClasses();
-          if(cls.indexOf(ui.className)===-1) ui.className=cls[0]||ui.className;
-        }
-      }).catch(function(){}).then(function(){
-        return fbGet('');
-      }).then(function(all){
-        mergeRemote(all, true);
+      getJSON(fbRoot('')).then(function(root){
+        mergeAll(root||{}, true);
         syncState.live = true;
         setSync('Live. Updates from other teachers arrive automatically.',true);
         safeRender();
       }).catch(function(){});
     };
-
     es.addEventListener('put', onChange);
     es.addEventListener('patch', onChange);
     es.onerror = function(){ syncState.live=false; };
@@ -1608,42 +1575,38 @@ function stopStream(){
   syncState.stream=null; syncState.live=false;
 }
 
-/* Roster changes propagate in the background; failures are not worth
-   interrupting someone typing in a student list. */
-function pushRosterQuiet(){
-  if(!fbReady() || !data.settings.autoSync) return;
-  pushRoster().catch(function(){});
-}
-
 /* ---- manual actions ---- */
 
 function testConnection(){
   var url=fbBase(), code=String(data.settings.classCode||'').trim();
   if(!url){ setSync('Paste your Realtime Database URL first.',false); return; }
-  if(url.indexOf('firebase')===-1 && url.indexOf('firebasedatabase')===-1){
-    setSync('That does not look like a Realtime Database URL. It should contain ' +
-            '<b>firebaseio.com</b> or <b>firebasedatabase.app</b>.',false);
+  if(url.indexOf('console.firebase.google.com')>-1){
+    setSync('That is the Firebase <b>console</b> link. You need the database URL '+
+            'shown at the top of the Realtime Database page.',false);
     return;
   }
-  if(url.indexOf('console.firebase.google.com')>-1){
-    setSync('That is the Firebase <b>console</b> link. You need the database URL ' +
-            'shown at the top of the Realtime Database page.',false);
+  if(url.indexOf('firebase')===-1){
+    setSync('That does not look like a Realtime Database URL. It should contain '+
+            '<b>firebaseio.com</b> or <b>firebasedatabase.app</b>.',false);
     return;
   }
   if(!code){ setSync('Set a class code. Every teacher must use the same one.',false); return; }
 
   setSync('Testing...',null);
-  fbPut('/ping', Date.now())
-    .then(function(){ return getJSON(fbCfg()).catch(function(){ return null; }); })
-    .then(function(cfg){
-      var people = cfg && cfg.users ? cfg.users.length : 0;
-      return fbGet('').then(function(all){
-        var n = all && all.sessions ? Object.keys(all.sessions).length : 0;
-        var r = all && all.roster ? Object.keys(all.roster).length : 0;
-        setSync('Connected. Database has '+people+' logins, '+r+' students and '+
-                n+' sessions in this class.',true);
-        startStream();
+  putJSON(fbRoot('/_ping'), Date.now())
+    .then(function(){ return getJSON(fbRoot('')); })
+    .then(function(root){
+      var cls=0, st=0, se=0;
+      Object.keys(root||{}).forEach(function(b){
+        if(b==='_people'||b==='_ping') return;
+        var n=root[b]; if(!n||typeof n!=='object') return;
+        cls++;
+        st += n.roster ? Object.keys(n.roster).length : 0;
+        se += n.sessions ? Object.keys(n.sessions).length : 0;
       });
+      setSync('Connected. Database holds '+cls+' class'+(cls===1?'':'es')+', '+
+              st+' students and '+se+' sessions. Now tap <b>Download all</b>.',true);
+      startStream();
     })
     .catch(function(err){ setSync(explain(err),false); });
 }
@@ -1653,24 +1616,34 @@ function syncUp(){
   if(syncState.busy) return;
   syncState.busy=true; setSync('Uploading...',null);
 
+  var classes=allClasses();
   var keys=Object.keys(data.sessions);
-  pushConfig().then(function(){
-    return pushRoster();
-  }).then(function(){
-    return keys.reduce(function(chain,k){
-      return chain.then(function(){ return pushSession(k); });
-    }, Promise.resolve());
-  }).then(function(){
-    syncState.busy=false;
-    data.settings.lastSync=new Date().toISOString();
-    saveData();
-    setSync('Uploaded setup, '+data.students.length+' students and '+
-            keys.length+' sessions.',true);
-    startStream();
-  }).catch(function(err){
-    syncState.busy=false;
-    setSync('Upload failed. '+explain(err),false);
-  });
+
+  pushUsers()
+    .then(function(){
+      return classes.reduce(function(chain,c){
+        return chain.then(function(){ return pushRoster(c); });
+      }, Promise.resolve());
+    })
+    .then(function(){
+      /* Sequential: Firebase handles parallel writes fine, but ordering
+         keeps the reported count honest if something fails midway. */
+      return keys.reduce(function(chain,k){
+        return chain.then(function(){ return pushSession(k); });
+      }, Promise.resolve());
+    })
+    .then(function(){
+      syncState.busy=false;
+      data.settings.lastSync=new Date().toISOString();
+      saveData();
+      setSync('Uploaded '+classes.length+' class'+(classes.length===1?'':'es')+', '+
+              data.students.length+' students and '+keys.length+' sessions.',true);
+      startStream();
+    })
+    .catch(function(err){
+      syncState.busy=false;
+      setSync('Upload failed. '+explain(err),false);
+    });
 }
 
 function syncDown(){
@@ -1678,17 +1651,10 @@ function syncDown(){
   if(syncState.busy) return;
   syncState.busy=true; setSync('Downloading...',null);
 
-  getJSON(fbCfg()).then(function(cfg){
-    mergeConfig(cfg);
-    // Config may have introduced the class we are about to read.
-    var cls=allClasses();
-    if(cls.indexOf(ui.className)===-1) ui.className=cls[0]||ui.className;
-    return fbGet('');
-  }).then(function(all){
+  getJSON(fbRoot('')).then(function(root){
     syncState.busy=false;
     data.settings.lastSync=new Date().toISOString();
-    mergeRemote(all, false);
-    normalise();
+    mergeAll(root||{}, false);
     render();
     startStream();
   }).catch(function(err){
