@@ -176,7 +176,7 @@
 
 <script>
 /* ================= storage ================= */
-var APP_VERSION = '1.6';
+var APP_VERSION = '1.7';
 var KEY = 'sgAttendanceData';
 var savedTo = [];
 
@@ -238,7 +238,7 @@ var data = {
     threshold: 75,
     teacherName: '',
     role:'teacher', pin:'', crClass:'',
-    fbUrl:'', classCode:'', autoSync:true
+    fbUrl:'', classCode:'', autoSync:true, sharePeople:false
   }
 };
 
@@ -1175,6 +1175,16 @@ function renderStudents(){
         : 'Not connected. Marking works offline without this.')+
     '</p>'+
     '<p class="hint">Parent phone numbers are never uploaded. They stay on this device.</p>'+
+    (isOwner() ?
+      '<div style="height:10px"></div>'+
+      '<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer">'+
+        '<input type="checkbox" id="sharePeople" style="width:auto;margin-top:3px"'+
+          (data.settings.sharePeople?' checked':'')+'>'+
+        '<span>Share people &amp; logins with other devices</span>'+
+      '</label>'+
+      '<p class="hint">Off by default. Turning it on puts PINs in the database, '+
+      'where anyone holding the URL and class code can read them. '+
+      'Safer alternative: Backup &rarr; <b>Transfer by text</b>.</p>' : '')+
   '</div>'+
 
   '<div class="card card-pad">'+
@@ -1316,12 +1326,37 @@ function fbReady(){
 /* Firebase keys cannot contain . $ # [ ] or / */
 function fbKey(k){ return String(k).replace(/[.$#\[\]\/|]/g,'_'); }
 
+function fbRoot(sub){
+  return fbBase() + '/attendance/' +
+         fbKey(String(data.settings.classCode).trim()) + sub + '.json';
+}
 /* The class name is part of the path, so two classes sharing a code
    still land in separate branches. */
 function fbPath(sub){
-  return fbBase() + '/attendance/' +
-         fbKey(String(data.settings.classCode).trim()) + '/' +
-         fbKey(ui.className || 'default') + sub + '.json';
+  return fbRoot('/' + fbKey(ui.className || 'default') + sub);
+}
+/* Shared setup that is not tied to one class: the class list itself,
+   subjects, teachers and logins. Sibling of the class branches. */
+function fbCfg(){ return fbRoot('/_config'); }
+
+function getJSON(url){
+  return fetch(url, { cache:'no-store' }).then(function(r){
+    return r.json().then(function(j){
+      if(j && j.error) throw new Error(j.error);
+      return j;
+    });
+  });
+}
+function putJSON(url, obj){
+  return fetch(url, {
+    method:'PUT', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(obj)
+  }).then(function(r){
+    return r.json().then(function(j){
+      if(j && j.error) throw new Error(j.error);
+      return j;
+    });
+  });
 }
 
 function fbGet(sub){
@@ -1385,6 +1420,22 @@ function pushRoster(){
   return fbPut('/roster', obj);
 }
 
+/* Only runs when the teacher has opted in, because this puts PINs into a
+   database that anyone holding the URL and class code can read. */
+function pushUsers(){
+  if(!fbReady() || !data.settings.sharePeople) return Promise.resolve(null);
+  var obj={};
+  (data.users||[]).forEach(function(u){
+    obj[fbKey(u.id)] = { id:u.id, name:u.name, pin:u.pin,
+                         role:u.role, classes:u.classes||[] };
+  });
+  return fbRootPut('/people', obj);
+}
+function pushUsersQuiet(){
+  if(!fbReady() || !data.settings.sharePeople) return;
+  pushUsers().catch(function(){});
+}
+
 function pushSession(key){
   if(!fbReady()) return Promise.resolve(null);
   var s=data.sessions[key];
@@ -1399,10 +1450,62 @@ function pushSession(key){
   });
 }
 
+function pushConfig(){
+  if(!fbReady()) return Promise.resolve(null);
+  data.configUpdatedAt = Date.now();
+  return putJSON(fbCfg(), {
+    classes: data.classes||[],
+    subjects: data.subjects||[],
+    teachers: data.teachers||[],
+    users: data.users||[],
+    collegeName: data.classInfo.collegeName||'',
+    threshold: data.settings.threshold||75,
+    updatedAt: data.configUpdatedAt
+  });
+}
+/* Config changes are small and frequent, so failures stay silent. */
+function pushConfigQuiet(){
+  if(!fbReady() || !data.settings.autoSync) return;
+  pushConfig().catch(function(){});
+}
+
+function mergeConfig(cfg){
+  if(!cfg || !cfg.updatedAt) return false;
+  // Whole-bundle last-write-wins, so removing a person actually propagates.
+  if(data.configUpdatedAt && data.configUpdatedAt >= cfg.updatedAt) return false;
+
+  if(Array.isArray(cfg.classes)) data.classes = cfg.classes;
+  if(Array.isArray(cfg.subjects)) data.subjects = cfg.subjects;
+  if(Array.isArray(cfg.teachers)) data.teachers = cfg.teachers;
+  if(Array.isArray(cfg.users)) data.users = cfg.users;
+  if(cfg.collegeName) data.classInfo.collegeName = cfg.collegeName;
+  if(cfg.threshold) data.settings.threshold = cfg.threshold;
+  data.configUpdatedAt = cfg.updatedAt;
+  return true;
+}
+
 /* ---- merge ---- */
 
 function mergeRemote(all, quiet){
   var addedStudents=0, mergedSessions=0;
+
+  /* Additive: a person added on another phone appears here, but nothing
+     local is deleted, so a stale copy elsewhere cannot wipe your logins. */
+  if(data.settings.sharePeople && all && all.people){
+    Object.keys(all.people).forEach(function(k){
+      var ru=all.people[k];
+      if(!ru || !ru.id || !ru.name) return;
+      var found=null;
+      (data.users||[]).forEach(function(u){ if(u.id===ru.id) found=u; });
+      if(found){
+        found.name=ru.name; found.pin=ru.pin;
+        found.role=ru.role; found.classes=ru.classes||[];
+      }else{
+        data.users.push({ id:ru.id, name:ru.name, pin:ru.pin,
+                          role:ru.role, classes:ru.classes||[] });
+      }
+    });
+  }
 
   var roster=(all && all.roster) || {};
   Object.keys(roster).forEach(function(k){
@@ -1475,12 +1578,19 @@ function startStream(){
   if(!fbReady() || typeof EventSource === 'undefined') return;
   stopStream();
   try{
-    var es = new EventSource(fbPath(''));
+    var es = new EventSource(fbRoot(''));
     syncState.stream = es;
 
     var onChange = function(){
-      // Any remote change: re-read the branch and merge.
-      fbGet('').then(function(all){
+      // Any remote change: re-read config and this class, then merge.
+      getJSON(fbCfg()).then(function(cfg){
+        if(mergeConfig(cfg)){
+          var cls=allClasses();
+          if(cls.indexOf(ui.className)===-1) ui.className=cls[0]||ui.className;
+        }
+      }).catch(function(){}).then(function(){
+        return fbGet('');
+      }).then(function(all){
         mergeRemote(all, true);
         syncState.live = true;
         setSync('Live. Updates from other teachers arrive automatically.',true);
@@ -1524,12 +1634,16 @@ function testConnection(){
 
   setSync('Testing...',null);
   fbPut('/ping', Date.now())
-    .then(function(){ return fbGet(''); })
-    .then(function(all){
-      var n = all && all.sessions ? Object.keys(all.sessions).length : 0;
-      var r = all && all.roster ? Object.keys(all.roster).length : 0;
-      setSync('Connected. Database has '+r+' students and '+n+' sessions.',true);
-      startStream();
+    .then(function(){ return getJSON(fbCfg()).catch(function(){ return null; }); })
+    .then(function(cfg){
+      var people = cfg && cfg.users ? cfg.users.length : 0;
+      return fbGet('').then(function(all){
+        var n = all && all.sessions ? Object.keys(all.sessions).length : 0;
+        var r = all && all.roster ? Object.keys(all.roster).length : 0;
+        setSync('Connected. Database has '+people+' logins, '+r+' students and '+
+                n+' sessions in this class.',true);
+        startStream();
+      });
     })
     .catch(function(err){ setSync(explain(err),false); });
 }
@@ -1540,7 +1654,9 @@ function syncUp(){
   syncState.busy=true; setSync('Uploading...',null);
 
   var keys=Object.keys(data.sessions);
-  pushRoster().then(function(){
+  pushConfig().then(function(){
+    return pushRoster();
+  }).then(function(){
     return keys.reduce(function(chain,k){
       return chain.then(function(){ return pushSession(k); });
     }, Promise.resolve());
@@ -1548,7 +1664,8 @@ function syncUp(){
     syncState.busy=false;
     data.settings.lastSync=new Date().toISOString();
     saveData();
-    setSync('Uploaded '+data.students.length+' students and '+keys.length+' sessions.',true);
+    setSync('Uploaded setup, '+data.students.length+' students and '+
+            keys.length+' sessions.',true);
     startStream();
   }).catch(function(err){
     syncState.busy=false;
@@ -1561,10 +1678,17 @@ function syncDown(){
   if(syncState.busy) return;
   syncState.busy=true; setSync('Downloading...',null);
 
-  fbGet('').then(function(all){
+  getJSON(fbCfg()).then(function(cfg){
+    mergeConfig(cfg);
+    // Config may have introduced the class we are about to read.
+    var cls=allClasses();
+    if(cls.indexOf(ui.className)===-1) ui.className=cls[0]||ui.className;
+    return fbGet('');
+  }).then(function(all){
     syncState.busy=false;
     data.settings.lastSync=new Date().toISOString();
     mergeRemote(all, false);
+    normalise();
     render();
     startStream();
   }).catch(function(err){
@@ -1970,7 +2094,7 @@ function bind(){
         if(target && confirm('Remove '+target.name+'?')){
           data.users=data.users.filter(function(x){ return x.id!==uid; });
           if(ui.userId===uid) ui.userId=null;
-          saveData(); render();
+          saveData(); pushUsersQuiet(); render();
         }
         return;
       }
@@ -2041,6 +2165,12 @@ function bind(){
 
     $('fbUrl').onblur=function(e){ data.settings.fbUrl=e.target.value.trim(); saveData(); };
     $('classCode').onblur=function(e){ data.settings.classCode=e.target.value.trim(); saveData(); };
+    if($('sharePeople')) $('sharePeople').onchange=function(e){
+      data.settings.sharePeople=!!e.target.checked;
+      saveData();
+      if(data.settings.sharePeople) pushUsersQuiet();
+      render();
+    };
     $('testBtn').onclick=testConnection;
     $('upBtn').onclick=syncUp;
     $('downBtn').onclick=syncDown;
@@ -2082,7 +2212,7 @@ function bind(){
         if(me.role==='owner') ui.userId=me.id;
       }
       $('uName').value=''; $('uPin').value='';
-      saveData(); render();
+      saveData(); pushUsersQuiet(); render();
       if(first) alert('Logins are on. The app will ask who is using it from now on.');
     };
 
