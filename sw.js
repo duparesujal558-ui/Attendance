@@ -12,7 +12,7 @@
  * marking attendance in a dead-signal classroom still works.
  */
 
-var CACHE_VERSION = 'attendance-v16';
+var CACHE_VERSION = 'attendance-v20';
 
 var SHELL = [
   './',
