@@ -176,7 +176,7 @@
 
 <script>
 /* ================= storage ================= */
-var APP_VERSION = '2.0';
+var APP_VERSION = '2.2';
 var KEY = 'sgAttendanceData';
 var savedTo = [];
 
@@ -221,6 +221,7 @@ var DEFAULT_LEFT_TEMPLATE =
   'Kindly look into this.\n\n- {college}';
 
 var SLOTS = ['Morning','Afternoon','Evening'];
+var KINDS = ['Lecture','Practical'];
 
 var data = {
   version: 4,
@@ -247,7 +248,8 @@ var ui = {
   date: todayISO(),
   month: todayISO().slice(0,7),
   userId:null, loginPick:null, loginMsg:'',
-  className:'', division:'A', batch:'All', slot:'Morning', subject:'', teacher:'',
+  className:'', division:'A', batch:'All', slot:'Morning',
+  kind:'Lecture', subject:'', teacher:'',
   marks:{},
   viewKey:null,
   dayDate: todayISO(),
@@ -387,11 +389,12 @@ function crClassOf(){
    groups, and roll number 1 in each is a different student. */
 function safeName(v){ return String(v==null?'':v).replace(/\|/g,'-'); }
 
-function sessionKey(className,date,division,batch,slot){
-  return safeName(className)+'|'+date+'|'+division+'|'+batch+'|'+slot;
+function sessionKey(className,date,division,batch,slot,kind){
+  return safeName(className)+'|'+date+'|'+division+'|'+batch+'|'+slot+
+         '|'+(kind||'Lecture');
 }
 function currentKey(){
-  return sessionKey(ui.className, ui.date, ui.division, ui.batch, ui.slot);
+  return sessionKey(ui.className, ui.date, ui.division, ui.batch, ui.slot, ui.kind);
 }
 function sessionLabel(s){
   var bits = [];
@@ -399,6 +402,7 @@ function sessionLabel(s){
   bits.push('Div '+s.division);
   bits.push(s.batch==='All' ? 'Full class' : 'Batch '+s.batch);
   bits.push(s.slot);
+  if(s.kind) bits.push(s.kind);
   if(s.subject) bits.push(s.subject);
   return bits.join(' \u00B7 ');
 }
@@ -564,6 +568,10 @@ function renderMark(){
         return '<option value="'+s+'"'+(s===ui.slot?' selected':'')+'>'+s+'</option>';
       }).join('')+'</select>'+
     '</div>'+
+    '<div style="height:8px"></div>'+
+    '<select id="kindIn">'+KINDS.map(function(k){
+      return '<option value="'+k+'"'+(k===ui.kind?' selected':'')+'>'+k+'</option>';
+    }).join('')+'</select>'+
     '<div style="height:8px"></div>'+
     '<div style="display:flex;gap:8px">'+
       '<select id="subjIn">'+optionList(data.subjects, ui.subject, 'No subject')+'</select>'+
@@ -797,7 +805,7 @@ function daySessions(date){
     .sort(function(a,b){
       var si=SLOTS.indexOf(a.slot)-SLOTS.indexOf(b.slot);
       if(si) return si;
-      return (a.division+a.batch).localeCompare(b.division+b.batch);
+      return (a.division+a.batch+(a.kind||'')).localeCompare(b.division+b.batch+(b.kind||''));
     });
 }
 
@@ -1404,13 +1412,28 @@ function pushSession(key){
   if(!s) return Promise.resolve(null);
   return putJSON(fbClass(s.className, '/sessions/'+fbKey(key)), {
     className:s.className, date:s.date, division:s.division,
-    batch:s.batch, slot:s.slot,
+    batch:s.batch, slot:s.slot, kind:s.kind||'Lecture',
     subject:s.subject||'', teacher:s.teacher||'',
     entries:s.entries.map(function(e){
       return { rollNo:e.rollNo, name:e.name, status:e.status };
     }),
     updatedAt: Date.now()
   });
+}
+
+/* Class list, subjects and teachers are shared setup, not per class. */
+function pushConfig(){
+  if(!fbReady()) return Promise.resolve(null);
+  return putJSON(fbRoot('/_config'), {
+    classes: allClasses(),
+    subjects: data.subjects||[],
+    teachers: data.teachers||[],
+    updatedAt: Date.now()
+  });
+}
+function pushConfigQuiet(){
+  if(!fbReady() || !data.settings.autoSync) return;
+  pushConfig().catch(function(){});
 }
 
 /* Only when opted in: this puts PINs somewhere anyone with the URL and
@@ -1443,8 +1466,18 @@ function pushUsersQuiet(){
 function mergeAll(root, quiet){
   var classesSeen=0;
 
+  /* Merge shared setup additively, so one device's blank list never
+     wipes another's subjects. */
+  if(root && root._config){
+    ['classes','subjects','teachers'].forEach(function(field){
+      (root._config[field]||[]).forEach(function(v){
+        if(v && data[field].indexOf(v)===-1) data[field].push(v);
+      });
+    });
+  }
+
   Object.keys(root||{}).forEach(function(branch){
-    if(branch==='_people' || branch==='_ping') return;
+    if(branch==='_people' || branch==='_ping' || branch==='_config') return;
     var node=root[branch];
     if(!node || typeof node!=='object') return;
 
@@ -1481,7 +1514,7 @@ function mergeAll(root, quiet){
       var rm=node.sessions[k];
       if(!rm || !rm.date || !rm.entries) return;
       var cls=rm.className||name;
-      var key=sessionKey(cls, rm.date, rm.division, rm.batch, rm.slot);
+      var key=sessionKey(cls, rm.date, rm.division, rm.batch, rm.slot, rm.kind);
       var ex=data.sessions[key];
       // Ours is newer, so a stale phone cannot overwrite fresher work.
       if(ex && ex.updatedAt && rm.updatedAt && ex.updatedAt > rm.updatedAt) return;
@@ -1495,7 +1528,7 @@ function mergeAll(root, quiet){
 
       data.sessions[key]={
         key:key, date:rm.date, division:rm.division, batch:rm.batch, slot:rm.slot,
-        subject:rm.subject||'', teacher:rm.teacher||'',
+        kind:rm.kind||'Lecture', subject:rm.subject||'', teacher:rm.teacher||'',
         collegeName:data.classInfo.collegeName, className:cls,
         entries:entries, total:entries.length, present:present,
         absent:entries.length-present,
@@ -1598,7 +1631,7 @@ function testConnection(){
     .then(function(root){
       var cls=0, st=0, se=0;
       Object.keys(root||{}).forEach(function(b){
-        if(b==='_people'||b==='_ping') return;
+        if(b==='_people'||b==='_ping'||b==='_config') return;
         var n=root[b]; if(!n||typeof n!=='object') return;
         cls++;
         st += n.roster ? Object.keys(n.roster).length : 0;
@@ -1620,6 +1653,7 @@ function syncUp(){
   var keys=Object.keys(data.sessions);
 
   pushUsers()
+    .then(function(){ return pushConfig(); })
     .then(function(){
       return classes.reduce(function(chain,c){
         return chain.then(function(){ return pushRoster(c); });
@@ -1788,6 +1822,7 @@ function loadMarks(){
   if(s && s.entries) s.entries.forEach(function(e){ ui.marks[e.id]=e.status; });
   if(s && s.subject) ui.subject=s.subject;
   if(s && s.teacher) ui.teacher=s.teacher;
+  if(s && s.kind) ui.kind=s.kind;
 }
 
 function bind(){
@@ -1865,28 +1900,29 @@ function bind(){
     $('divIn').onchange=function(e){ ui.division=e.target.value; loadMarks(); render(); };
     $('batchIn').onchange=function(e){ ui.batch=e.target.value; loadMarks(); render(); };
     $('slotIn').onchange=function(e){ ui.slot=e.target.value; loadMarks(); render(); };
+    $('kindIn').onchange=function(e){ ui.kind=e.target.value; loadMarks(); render(); };
     $('subjIn').onchange=function(e){ ui.subject=e.target.value; };
     $('teachIn').onchange=function(e){ ui.teacher=e.target.value; };
 
-    $('addSubj').onclick=function(){ ui.addingSubject=true; render(); };
+    if($('addSubj')) $('addSubj').onclick=function(){ ui.addingSubject=true; render(); };
     if($('cancelSubj')) $('cancelSubj').onclick=function(){ ui.addingSubject=false; render(); };
     if($('saveSubj')) $('saveSubj').onclick=function(){
       var v=$('newSubj').value.trim();
       if(v){
         if(data.subjects.indexOf(v)===-1) data.subjects.push(v);
-        ui.subject=v; saveData();
+        ui.subject=v; saveData(); pushConfigQuiet();
       }
       ui.addingSubject=false; render();
     };
     if($('newSubj')) $('newSubj').onkeydown=function(e){ if(e.key==='Enter') $('saveSubj').click(); };
 
-    $('addTeach').onclick=function(){ ui.addingTeacher=true; render(); };
+    if($('addTeach')) $('addTeach').onclick=function(){ ui.addingTeacher=true; render(); };
     if($('cancelTeach')) $('cancelTeach').onclick=function(){ ui.addingTeacher=false; render(); };
     if($('saveTeach')) $('saveTeach').onclick=function(){
       var v=$('newTeach').value.trim();
       if(v){
         if(data.teachers.indexOf(v)===-1) data.teachers.push(v);
-        ui.teacher=v; saveData();
+        ui.teacher=v; saveData(); pushConfigQuiet();
       }
       ui.addingTeacher=false; render();
     };
@@ -1921,7 +1957,8 @@ function bind(){
     };
     $('editDay').onclick=function(){
       ui.date=rec.date; ui.division=rec.division; ui.batch=rec.batch;
-      ui.slot=rec.slot; ui.subject=rec.subject||''; ui.teacher=rec.teacher||'';
+      ui.slot=rec.slot; ui.kind=rec.kind||'Lecture';
+      ui.subject=rec.subject||''; ui.teacher=rec.teacher||'';
       loadMarks(); ui.tab='mark'; render();
     };
     /* onclick, not addEventListener - re-render must replace, not stack. */
@@ -2145,7 +2182,7 @@ function bind(){
       var v=$('addClassIn').value.trim();
       if(v && data.classes.indexOf(v)===-1){ data.classes.push(v); }
       if(v) ui.className=v;
-      $('addClassIn').value=''; saveData(); render();
+      $('addClassIn').value=''; saveData(); pushConfigQuiet(); render();
     };
     $('addClassIn').onkeydown=function(e){ if(e.key==='Enter') $('addClassBtn').click(); };
     $('activeClass').onchange=function(e){
@@ -2184,14 +2221,14 @@ function bind(){
 
     $('addSubjBtn').onclick=function(){
       var v=$('addSubjIn').value.trim();
-      if(v && data.subjects.indexOf(v)===-1){ data.subjects.push(v); saveData(); }
+      if(v && data.subjects.indexOf(v)===-1){ data.subjects.push(v); saveData(); pushConfigQuiet(); }
       $('addSubjIn').value=''; render();
     };
     $('addSubjIn').onkeydown=function(e){ if(e.key==='Enter') $('addSubjBtn').click(); };
 
     $('addTeachBtn').onclick=function(){
       var v=$('addTeachIn').value.trim();
-      if(v && data.teachers.indexOf(v)===-1){ data.teachers.push(v); saveData(); }
+      if(v && data.teachers.indexOf(v)===-1){ data.teachers.push(v); saveData(); pushConfigQuiet(); }
       $('addTeachIn').value=''; render();
     };
     $('addTeachIn').onkeydown=function(e){ if(e.key==='Enter') $('addTeachBtn').click(); };
@@ -2541,7 +2578,7 @@ function generateSession(){
 
   data.sessions[key]={
     key:key, date:ui.date, division:ui.division, batch:ui.batch, slot:ui.slot,
-    subject:ui.subject||'', teacher:ui.teacher||'',
+    kind:ui.kind||'Lecture', subject:ui.subject||'', teacher:ui.teacher||'',
     collegeName:data.classInfo.collegeName, className:ui.className,
     entries:entries, total:entries.length, present:present, absent:entries.length-present,
     notified: prev&&prev.notified?prev.notified:[],
@@ -2685,9 +2722,13 @@ function legacyCopy(text, done){
 /* One place that applies an imported payload, used by both file and text restore. */
 function applyImported(p){
   data.classInfo=p.classInfo||data.classInfo;
-  data.students=p.students;
+  data.students=Array.isArray(p.students)?p.students:[];
   data.sessions=p.sessions||{};
   data.divisions=p.divisions||data.divisions;
+  /* These three were being dropped, so a restored phone lost its class
+     list and every login while appearing to import fine. */
+  data.classes=Array.isArray(p.classes)?p.classes:[];
+  data.users=Array.isArray(p.users)?p.users:[];
   data.subjects=Array.isArray(p.subjects)?p.subjects:[];
   data.teachers=Array.isArray(p.teachers)?p.teachers:[];
   data.settings=Object.assign({
@@ -2695,6 +2736,13 @@ function applyImported(p){
   }, p.settings||{});
   if(p.days && !p.sessions) migrateDays(p.days);
   normalise();
+  /* A restored device starts signed out, so whoever holds it must
+     identify themselves rather than inheriting the sender's session. */
+  ui.userId=null; ui.loginPick=null;
+  var cls=allClasses();
+  if(cls.indexOf(ui.className)===-1) ui.className=cls[0]||'';
+  var dv=allDivisions();
+  if(dv.indexOf(ui.division)===-1) ui.division=dv[0];
   loadMarks();
   saveData();
 }
@@ -2750,8 +2798,9 @@ function normalise(){
   Object.keys(data.sessions||{}).forEach(function(k){
     var ss=data.sessions[k];
     if(!ss.className) ss.className = fallback;
-    // Old keys had no class segment; rebuild them so lookups line up.
-    var proper = sessionKey(ss.className, ss.date, ss.division, ss.batch, ss.slot);
+    if(!ss.kind) ss.kind = 'Lecture';
+    // Older keys lacked class and kind; rebuild so lookups line up.
+    var proper = sessionKey(ss.className, ss.date, ss.division, ss.batch, ss.slot, ss.kind);
     if(k !== proper){
       ss.key = proper;
       data.sessions[proper] = ss;
