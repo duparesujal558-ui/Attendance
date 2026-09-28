@@ -176,7 +176,7 @@
 
 <script>
 /* ================= storage ================= */
-var APP_VERSION = '2.3';
+var APP_VERSION = '2.4';
 var KEY = 'sgAttendanceData';
 var savedTo = [];
 
@@ -1202,6 +1202,11 @@ function renderStudents(){
       '<button class="btn ghost sm" id="upBtn" style="flex:1">Upload mine</button>'+
       '<button class="btn ghost sm" id="downBtn" style="flex:1">Download all</button>'+
     '</div>'+
+    (isOwner() ?
+      '<div style="height:8px"></div>'+
+      '<button class="btn" id="linkBtn">Copy setup link for other teachers</button>'+
+      '<p class="hint" id="linkMsg">Sends the database settings with the link, so '+
+      'their phone arrives connected and asks them to sign in.</p>' : '')+
     '<p class="hint" id="syncMsg">'+
       (fbReady()
         ? (syncState.live ? 'Live. Updates from other teachers arrive automatically.'
@@ -1661,6 +1666,32 @@ function startStream(){
 function stopStream(){
   if(syncState.stream){ try{ syncState.stream.close(); }catch(e){} }
   syncState.stream=null; syncState.live=false;
+}
+
+/* Sharing the plain app link gives the other phone an empty app: no
+   database, so no classes and no logins, so it never asks who is using it.
+   This link carries the connection, so opening it sets the phone up. */
+function setupLink(){
+  var base = location.origin + location.pathname;
+  return base + '?db=' + encodeURIComponent(fbBase()) +
+         '&code=' + encodeURIComponent(String(data.settings.classCode||'').trim());
+}
+
+/* Runs once at startup when the app is opened from such a link. */
+function adoptLinkSettings(){
+  var q = new URLSearchParams(location.search);
+  var db = q.get('db'), code = q.get('code');
+  if(!db || !code) return false;
+
+  var changed = (data.settings.fbUrl !== db) ||
+                (data.settings.classCode !== code);
+  data.settings.fbUrl = db;
+  data.settings.classCode = code;
+  saveData();
+
+  // Clean the address bar so the code is not left on screen.
+  try{ history.replaceState(null, '', location.origin + location.pathname); }catch(e){}
+  return changed || !data.users || !data.users.length;
 }
 
 /* ---- manual actions ---- */
@@ -2236,6 +2267,24 @@ function bind(){
       if(data.settings.sharePeople) pushUsersQuiet();
       render();
     };
+    if($('linkBtn')) $('linkBtn').onclick=function(){
+      if(!fbReady()){
+        $('linkMsg').textContent='Set the database URL and class code first.';
+        $('linkMsg').style.color='var(--absent)';
+        return;
+      }
+      var link=setupLink();
+      var done=function(){
+        $('linkMsg').innerHTML='Copied. Send it on WhatsApp. Opening it sets their '+
+          'phone up and asks them to sign in.<br><span style="word-break:break-all;'+
+          'opacity:.6">'+esc(link)+'</span>';
+        $('linkMsg').style.color='var(--present)';
+      };
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(link).then(done).catch(function(){ legacyCopy(link,done); });
+      }else{ legacyCopy(link,done); }
+    };
+
     $('testBtn').onclick=testConnection;
     $('upBtn').onclick=syncUp;
     $('downBtn').onclick=syncDown;
@@ -2981,6 +3030,17 @@ document.querySelectorAll('nav button').forEach(function(b){
 })();
 
 loadData().then(function(){
+  /* A phone opened from a setup link should arrive ready: connected,
+     populated, and asking who is using it - not blank. */
+  var fromLink = adoptLinkSettings();
+  if(fromLink && fbReady()){
+    return getJSON(fbRoot('')).then(function(root){
+      mergeAll(root||{}, true);
+      data.settings.lastSync=new Date().toISOString();
+      saveData();
+    }).catch(function(){});
+  }
+}).then(function(){
   var cls=allClasses();
   if(cls.indexOf(ui.className)===-1) ui.className = cls[0] || '';
   var divs=allDivisions();
