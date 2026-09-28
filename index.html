@@ -176,7 +176,7 @@
 
 <script>
 /* ================= storage ================= */
-var APP_VERSION = '2.2';
+var APP_VERSION = '2.3';
 var KEY = 'sgAttendanceData';
 var savedTo = [];
 
@@ -229,6 +229,7 @@ var data = {
   divisions: ['A','B'],
   classes: [],
   users: [],
+  graveyard: {},
   subjects: [],
   teachers: [],
   students: [],
@@ -239,7 +240,7 @@ var data = {
     threshold: 75,
     teacherName: '',
     role:'teacher', pin:'', crClass:'',
-    fbUrl:'', classCode:'', autoSync:true, sharePeople:false
+    fbUrl:'', classCode:'', autoSync:true, sharePeople:true
   }
 };
 
@@ -367,6 +368,33 @@ function myClasses(){
   if(!u || u.role==='owner') return all;
   var mine=u.classes||[];
   return all.filter(function(c){ return mine.indexOf(c)>-1; });
+}
+
+/* A purely additive merge re-creates anything you delete, because the other
+   device still has it. So a deletion is recorded as a tombstone, synced like
+   any other change, and the merge refuses to resurrect what it names. */
+function tombKey(kind, id){ return kind+':'+String(id); }
+function bury(kind, id){
+  if(!data.graveyard) data.graveyard={};
+  data.graveyard[tombKey(kind,id)] = Date.now();
+}
+function isBuried(kind, id, remoteStamp){
+  if(!data.graveyard) return false;
+  var t=data.graveyard[tombKey(kind,id)];
+  if(!t) return false;
+  // A genuinely newer remote edit wins; anything older stays buried.
+  if(remoteStamp && remoteStamp > t) { delete data.graveyard[tombKey(kind,id)]; return false; }
+  return true;
+}
+/* Class names differ only by spacing or case far too easily. */
+function sameName(a,b){
+  return String(a||'').trim().toLowerCase() === String(b||'').trim().toLowerCase();
+}
+function canonClass(name){
+  var n=String(name||'').trim();
+  var hit=null;
+  (data.classes||[]).forEach(function(c){ if(sameName(c,n)) hit=c; });
+  return hit || n;
 }
 
 /* CR mode: can mark attendance and produce the sheet, nothing else.
@@ -1190,9 +1218,9 @@ function renderStudents(){
           (data.settings.sharePeople?' checked':'')+'>'+
         '<span>Share people &amp; logins with other devices</span>'+
       '</label>'+
-      '<p class="hint">Off by default. Turning it on puts PINs in the database, '+
-      'where anyone holding the URL and class code can read them. '+
-      'Safer alternative: Backup &rarr; <b>Transfer by text</b>.</p>' : '')+
+      '<p class="hint">On, so every phone asks for a login. It stores PINs in the '+
+      'database, which anyone holding the URL and class code can read \u2014 keep '+
+      'that code private. Untick to keep logins on this phone only.</p>' : '')+
   '</div>'+
 
   '<div class="card card-pad">'+
@@ -1428,6 +1456,7 @@ function pushConfig(){
     classes: allClasses(),
     subjects: data.subjects||[],
     teachers: data.teachers||[],
+    graveyard: data.graveyard||{},
     updatedAt: Date.now()
   });
 }
@@ -1469,11 +1498,28 @@ function mergeAll(root, quiet){
   /* Merge shared setup additively, so one device's blank list never
      wipes another's subjects. */
   if(root && root._config){
+    // Other devices' tombstones first, so nothing below re-adds them.
+    var rg=root._config.graveyard||{};
+    Object.keys(rg).forEach(function(k){
+      if(!data.graveyard[k] || rg[k] > data.graveyard[k]) data.graveyard[k]=rg[k];
+    });
+
     ['classes','subjects','teachers'].forEach(function(field){
       (root._config[field]||[]).forEach(function(v){
-        if(v && data[field].indexOf(v)===-1) data[field].push(v);
+        if(!v) return;
+        var kind = field==='classes' ? 'class' : field.slice(0,-1);
+        if(isBuried(kind, v)) return;
+        // Fold "TY AIML", "ty aiml" and "TY AIML " into one entry.
+        var exists=false;
+        data[field].forEach(function(x){ if(sameName(x,v)) exists=true; });
+        if(!exists) data[field].push(String(v).trim());
       });
     });
+
+    // Drop anything this device deleted that is still listed locally.
+    data.classes=data.classes.filter(function(c){ return !isBuried('class',c); });
+    data.subjects=data.subjects.filter(function(c){ return !isBuried('subject',c); });
+    data.teachers=data.teachers.filter(function(c){ return !isBuried('teacher',c); });
   }
 
   Object.keys(root||{}).forEach(function(branch){
@@ -1490,13 +1536,18 @@ function mergeAll(root, quiet){
       });
     });
 
-    if(data.classes.indexOf(name)===-1) data.classes.push(name);
+    name = canonClass(name);
+    if(isBuried('class', name)) return;
+    var known=false;
+    data.classes.forEach(function(c){ if(sameName(c,name)) known=true; });
+    if(!known) data.classes.push(name);
     classesSeen++;
 
     Object.keys(node.roster||{}).forEach(function(k){
       var rs=node.roster[k];
       if(!rs || !rs.rollNo) return;
-      var cls=rs.className||name;
+      var cls=canonClass(rs.className||name);
+      if(isBuried('student', cls+'|'+(rs.division||'A')+'|'+rs.rollNo)) return;
       var ex=findByRoll(rs.rollNo, rs.division, cls);
       if(ex){
         if(rs.name) ex.name=rs.name;
@@ -1513,8 +1564,9 @@ function mergeAll(root, quiet){
     Object.keys(node.sessions||{}).forEach(function(k){
       var rm=node.sessions[k];
       if(!rm || !rm.date || !rm.entries) return;
-      var cls=rm.className||name;
+      var cls=canonClass(rm.className||name);
       var key=sessionKey(cls, rm.date, rm.division, rm.batch, rm.slot, rm.kind);
+      if(isBuried('session', key, rm.updatedAt)) return;
       var ex=data.sessions[key];
       // Ours is newer, so a stale phone cannot overwrite fresher work.
       if(ex && ex.updatedAt && rm.updatedAt && ex.updatedAt > rm.updatedAt) return;
@@ -1546,6 +1598,7 @@ function mergeAll(root, quiet){
     Object.keys(root._people).forEach(function(k){
       var ru=root._people[k];
       if(!ru || !ru.id || !ru.name) return;
+      if(isBuried('user', ru.id)) return;
       var found=null;
       (data.users||[]).forEach(function(u){ if(u.id===ru.id) found=u; });
       if(found){
@@ -1557,6 +1610,8 @@ function mergeAll(root, quiet){
       }
     });
   }
+
+  data.users=(data.users||[]).filter(function(u){ return !isBuried('user',u.id); });
 
   normalise();
   if(!ui.className){
@@ -1889,8 +1944,10 @@ function bind(){
     if($('saveClass')) $('saveClass').onclick=function(){
       var v=$('newClass').value.trim();
       if(v){
-        if(data.classes.indexOf(v)===-1) data.classes.push(v);
-        ui.className=v; saveData();
+        var seen=false;
+        data.classes.forEach(function(c){ if(sameName(c,v)) seen=true; });
+        if(!seen) data.classes.push(v);
+        ui.className=canonClass(v); saveData(); pushConfigQuiet();
       }
       ui.addingClass=false; render();
     };
@@ -2095,9 +2152,10 @@ function bind(){
         var uid=du.dataset.deluser, target=null;
         data.users.forEach(function(x){ if(x.id===uid) target=x; });
         if(target && confirm('Remove '+target.name+'?')){
+          bury('user', uid);
           data.users=data.users.filter(function(x){ return x.id!==uid; });
           if(ui.userId===uid) ui.userId=null;
-          saveData(); pushUsersQuiet(); render();
+          saveData(); pushUsersQuiet(); pushConfigQuiet(); render();
         }
         return;
       }
@@ -2126,10 +2184,12 @@ function bind(){
           ui.confirmClass=null; saveData(); render(); return;
         }
         if(rm.dataset.rm==='subj'){
+          bury('subject', val);
           data.subjects=data.subjects.filter(function(x){ return x!==val; });
           if(ui.subject===val) ui.subject='';
           ui.confirmSubj=null;
         }else{
+          bury('teacher', val);
           data.teachers=data.teachers.filter(function(x){ return x!==val; });
           if(ui.teacher===val) ui.teacher='';
           if(data.settings.teacherName===val) data.settings.teacherName='';
@@ -2160,6 +2220,8 @@ function bind(){
       else if(act==='del'){ ui.confirmId=id; ui.editingId=null; }
       else if(act==='noDel'){ ui.confirmId=null; }
       else if(act==='doDel'){
+        var gone=findStudent(id);
+        if(gone) bury('student', gone.className+'|'+gone.division+'|'+gone.rollNo);
         data.students=data.students.filter(function(x){ return x.id!==id; });
         ui.confirmId=null; saveData(); pushRosterQuiet();
       }
@@ -2180,7 +2242,12 @@ function bind(){
 
     $('addClassBtn').onclick=function(){
       var v=$('addClassIn').value.trim();
-      if(v && data.classes.indexOf(v)===-1){ data.classes.push(v); }
+      if(v){
+        var known=false;
+        data.classes.forEach(function(c){ if(sameName(c,v)) known=true; });
+        if(!known) data.classes.push(v);
+        v=canonClass(v);
+      }
       if(v) ui.className=v;
       $('addClassIn').value=''; saveData(); pushConfigQuiet(); render();
     };
@@ -2221,14 +2288,16 @@ function bind(){
 
     $('addSubjBtn').onclick=function(){
       var v=$('addSubjIn').value.trim();
-      if(v && data.subjects.indexOf(v)===-1){ data.subjects.push(v); saveData(); pushConfigQuiet(); }
+      var dup=false; data.subjects.forEach(function(x){ if(sameName(x,v)) dup=true; });
+      if(v && !dup){ data.subjects.push(v); saveData(); pushConfigQuiet(); }
       $('addSubjIn').value=''; render();
     };
     $('addSubjIn').onkeydown=function(e){ if(e.key==='Enter') $('addSubjBtn').click(); };
 
     $('addTeachBtn').onclick=function(){
       var v=$('addTeachIn').value.trim();
-      if(v && data.teachers.indexOf(v)===-1){ data.teachers.push(v); saveData(); pushConfigQuiet(); }
+      var dupT=false; data.teachers.forEach(function(x){ if(sameName(x,v)) dupT=true; });
+      if(v && !dupT){ data.teachers.push(v); saveData(); pushConfigQuiet(); }
       $('addTeachIn').value=''; render();
     };
     $('addTeachIn').onkeydown=function(e){ if(e.key==='Enter') $('addTeachBtn').click(); };
@@ -2784,6 +2853,31 @@ function migrateDays(days){
 }
 function normalise(){
   if(!Array.isArray(data.classes)) data.classes=[];
+  if(!data.graveyard || typeof data.graveyard!=='object') data.graveyard={};
+
+  /* Collapse names that differ only by case or spacing, and repoint any
+     students or sessions that were filed under the variant. */
+  ['classes','subjects','teachers'].forEach(function(field){
+    var out=[];
+    (data[field]||[]).forEach(function(v){
+      var t=String(v||'').trim();
+      if(!t) return;
+      var dup=null;
+      out.forEach(function(x){ if(sameName(x,t)) dup=x; });
+      if(dup){
+        if(field==='classes'){
+          data.students.forEach(function(st){ if(sameName(st.className,t)) st.className=dup; });
+          Object.keys(data.sessions||{}).forEach(function(k){
+            var ss=data.sessions[k];
+            if(sameName(ss.className,t)) ss.className=dup;
+          });
+        }
+      }else{
+        out.push(t);
+      }
+    });
+    data[field]=out;
+  });
 
   /* Everything created before classes existed belongs to one class.
      Use whatever was in Class details, so nothing looks unassigned. */
@@ -2846,6 +2940,7 @@ function loadData(){
           data.divisions=p.divisions||data.divisions;
           data.classes=Array.isArray(p.classes)?p.classes:[];
           data.users=Array.isArray(p.users)?p.users:[];
+          data.graveyard=(p.graveyard && typeof p.graveyard==='object')?p.graveyard:{};
           data.subjects=Array.isArray(p.subjects)?p.subjects:[];
           data.teachers=Array.isArray(p.teachers)?p.teachers:[];
           data.sessions=p.sessions||{};
