@@ -176,7 +176,7 @@
 
 <script>
 /* ================= storage ================= */
-var APP_VERSION = '2.4';
+var APP_VERSION = '2.5';
 var KEY = 'sgAttendanceData';
 var savedTo = [];
 
@@ -1128,6 +1128,19 @@ function renderStudents(){
   (isOwner() ?
   '<div class="card card-pad">'+
     '<p class="label">People &amp; logins</p>'+
+    (loginsOn()
+      ? '<div style="background:var(--present-bg);color:var(--present);border-radius:9px;'+
+        'padding:9px 11px;font-size:13px;margin-bottom:10px">'+
+        '<b>Login is ON</b> \u2014 '+data.users.length+' '+
+        (data.users.length===1?'person':'people')+
+        '. The app asks who is using it every time it opens.'+
+        '</div>'+
+        '<button class="btn" id="lockNow" style="margin-bottom:10px">Lock now and sign out</button>'
+      : '<div style="background:var(--left-bg);color:var(--left);border-radius:9px;'+
+        'padding:9px 11px;font-size:13px;margin-bottom:10px">'+
+        '<b>Login is OFF</b> \u2014 nobody added yet, so the app opens straight to '+
+        'the register. Add the first person below to turn it on.'+
+        '</div>')+
     (loginsOn()
       ? '<div style="border:1px solid var(--line);border-radius:9px;overflow:hidden">'+
         data.users.map(function(u){
@@ -2308,6 +2321,12 @@ function bind(){
       loadMarks(); render();
     };
 
+    if($('lockNow')) $('lockNow').onclick=function(){
+      ui.userId=null; ui.loginPick=null; ui.loginMsg='';
+      ui.tab='mark';
+      render();
+    };
+
     if($('uAdd')) $('uAdd').onclick=function(){
       var name=$('uName').value.trim();
       var pin=$('uPin').value.replace(/\D/g,'').slice(0,6);
@@ -2846,7 +2865,9 @@ function applyImported(p){
   /* These three were being dropped, so a restored phone lost its class
      list and every login while appearing to import fine. */
   data.classes=Array.isArray(p.classes)?p.classes:[];
-  data.users=Array.isArray(p.users)?p.users:[];
+  /* An older backup has no users field at all. Treat that as "nothing to
+     say about logins" rather than "delete every login". */
+  data.users=Array.isArray(p.users)?p.users:(data.users||[]);
   data.subjects=Array.isArray(p.subjects)?p.subjects:[];
   data.teachers=Array.isArray(p.teachers)?p.teachers:[];
   data.settings=Object.assign({
